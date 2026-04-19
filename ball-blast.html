@@ -1,0 +1,1446 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ball Blast</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;900&display=swap');
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body {
+    background:#1a1a2e;
+    overflow:hidden;
+    touch-action:none;
+    font-family:'Nunito',sans-serif;
+  }
+  #game-container {
+    position:relative;
+    width:100vw;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+  }
+  canvas {
+    display:block;
+    width:100%;
+    height:100%;
+  }
+
+  /* ── HUD ── */
+  #hud {
+    position:absolute;
+    top:0; left:0; right:0;
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+    padding:12px 14px;
+    pointer-events:none;
+    z-index:5;
+  }
+  .hud-box {
+    background:rgba(255,255,255,0.18);
+    backdrop-filter:blur(6px);
+    border:2px solid rgba(255,255,255,0.35);
+    border-radius:14px;
+    padding:5px 13px;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    font-size:15px;
+    color:#fff;
+    font-weight:700;
+    text-shadow:0 1px 3px rgba(0,0,0,.4);
+    min-width:70px;
+  }
+  .hud-box .icon { font-size:18px; }
+  #lvl-box { flex-direction:column; gap:2px; min-width:80px; }
+  #lvl-bar-bg { width:100%; height:7px; background:rgba(255,255,255,.25); border-radius:10px; }
+  #lvl-bar { height:100%; background:#4ade80; border-radius:10px; transition:width .3s; }
+  #pause-btn {
+    background:rgba(255,255,255,.22);
+    border:2px solid rgba(255,255,255,.4);
+    border-radius:12px;
+    width:42px; height:42px;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; pointer-events:all; font-size:18px;
+  }
+
+  /* ── SCREENS ── */
+  .screen {
+    position:absolute;
+    inset:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    z-index:20;
+    transition:opacity .3s;
+  }
+  .screen.hidden { display:none; }
+
+  /* START */
+  #start-screen {
+    background:linear-gradient(180deg,#87ceeb 0%,#c5e8f7 35%,#8DC63F 35%,#6aab1e 100%);
+  }
+  #start-screen .logo {
+    font-size:58px;
+    font-weight:900;
+    color:#fff;
+    text-shadow:0 4px 0 #c0392b, 0 6px 20px rgba(0,0,0,.4);
+    letter-spacing:4px;
+    margin-bottom:8px;
+  }
+  #start-screen .sub {
+    color:#fff;
+    font-size:16px;
+    margin-bottom:40px;
+    text-shadow:0 1px 4px rgba(0,0,0,.4);
+  }
+  .big-btn {
+    padding:16px 60px;
+    font-family:'Nunito',sans-serif;
+    font-size:26px;
+    font-weight:900;
+    color:#fff;
+    background:linear-gradient(135deg,#ff6b35,#f7c59f);
+    border:none;
+    border-radius:50px;
+    cursor:pointer;
+    box-shadow:0 6px 0 #c0392b, 0 8px 25px rgba(255,100,50,.4);
+    transition:all .1s;
+    letter-spacing:2px;
+  }
+  .big-btn:active { transform:translateY(3px); box-shadow:0 3px 0 #c0392b; }
+  .best-score {
+    margin-top:20px;
+    color:#fff7;
+    font-size:17px;
+    text-shadow:0 1px 4px rgba(0,0,0,.3);
+  }
+  .coin-display-start {
+    position:absolute;
+    top:18px; right:18px;
+    background:rgba(255,255,255,.25);
+    border-radius:30px;
+    padding:7px 16px;
+    font-size:18px;
+    color:#fff700;
+    font-weight:900;
+    text-shadow:0 1px 4px rgba(0,0,0,.4);
+    backdrop-filter:blur(4px);
+    border:2px solid rgba(255,255,255,.35);
+  }
+
+  /* GAME OVER */
+  #gameover-screen {
+    background:rgba(10,10,25,.92);
+    backdrop-filter:blur(8px);
+  }
+  #gameover-screen h2 {
+    font-size:52px;
+    color:#ff4757;
+    text-shadow:0 0 30px rgba(255,71,87,.6);
+    margin-bottom:10px;
+  }
+  #gameover-screen .go-score {
+    font-size:28px;
+    color:#fff;
+    margin-bottom:5px;
+  }
+  #gameover-screen .go-best {
+    font-size:18px;
+    color:#ffd700;
+    margin-bottom:30px;
+  }
+  .go-coins {
+    font-size:22px;
+    color:#ffd700;
+    margin-bottom:8px;
+    font-weight:700;
+  }
+  .btn-row { display:flex; gap:16px; }
+  .sec-btn {
+    padding:14px 36px;
+    font-family:'Nunito',sans-serif;
+    font-size:20px;
+    font-weight:700;
+    color:#fff;
+    background:rgba(255,255,255,.15);
+    border:2px solid rgba(255,255,255,.3);
+    border-radius:40px;
+    cursor:pointer;
+    margin-top:10px;
+  }
+
+  /* SHOP */
+  #shop-screen {
+    background:rgba(10,10,25,.95);
+    backdrop-filter:blur(10px);
+    overflow-y:auto;
+    padding:20px;
+    justify-content:flex-start;
+    padding-top:50px;
+  }
+  #shop-screen h2 { color:#ffd700; font-size:34px; margin-bottom:16px; }
+  .shop-coins { font-size:20px; color:#ffd700; margin-bottom:20px; }
+  .upgrade-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; width:100%; max-width:420px; }
+  .upg-card {
+    background:rgba(255,255,255,.08);
+    border:2px solid rgba(255,255,255,.12);
+    border-radius:16px;
+    padding:14px;
+    text-align:center;
+    cursor:pointer;
+    transition:.15s;
+  }
+  .upg-card:active { transform:scale(.96); }
+  .upg-card .upg-icon { font-size:32px; margin-bottom:6px; }
+  .upg-card .upg-name { color:#fff; font-weight:700; font-size:15px; }
+  .upg-card .upg-lvl { color:#4ecdc4; font-size:13px; margin:4px 0; }
+  .upg-bar-bg { width:100%; height:6px; background:rgba(255,255,255,.15); border-radius:4px; margin:6px 0; }
+  .upg-bar-fill { height:100%; background:linear-gradient(90deg,#4ecdc4,#44a08d); border-radius:4px; }
+  .upg-price { color:#ffd700; font-weight:700; font-size:14px; }
+  .close-btn {
+    position:absolute;
+    top:14px; right:14px;
+    background:#ff4757;
+    border:none;
+    color:#fff;
+    width:44px; height:44px;
+    border-radius:50%;
+    font-size:22px;
+    cursor:pointer;
+    font-family:'Nunito',sans-serif;
+    font-weight:900;
+  }
+
+  /* NOTIF */
+  .notif {
+    position:fixed;
+    top:80px; left:50%;
+    transform:translateX(-50%);
+    background:rgba(0,0,0,.88);
+    color:#fff;
+    padding:12px 28px;
+    border-radius:30px;
+    font-weight:700;
+    font-size:15px;
+    z-index:100;
+    pointer-events:none;
+    animation:notifAnim .3s ease;
+  }
+  @keyframes notifAnim { from { opacity:0; transform:translateX(-50%) translateY(-12px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="gameCanvas"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-box" id="lvl-box">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span class="icon">⚡</span>
+        <span>Lvl <span id="lvl-num">1</span></span>
+      </div>
+      <div id="lvl-bar-bg"><div id="lvl-bar" style="width:0%"></div></div>
+    </div>
+    <div class="hud-box"><span class="icon">🪙</span><span id="coin-hud">0</span></div>
+    <div class="hud-box"><span class="icon">💎</span><span id="score-hud">0</span></div>
+    <div id="pause-btn">⏸</div>
+  </div>
+
+  <!-- START -->
+  <div id="start-screen" class="screen">
+    <div class="coin-display-start">🪙 <span id="coin-start">0</span></div>
+    <div class="logo">BALL BLAST</div>
+    <div class="sub">Détruis les rochers !</div>
+    <button class="big-btn" id="startBtn">▶ JOUER</button>
+    <div class="best-score">🏆 Meilleur : <span id="best-start">0</span></div>
+    <button class="sec-btn" id="shopBtnStart" style="margin-top:14px;font-size:16px;padding:10px 30px;">🛒 Boutique</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div id="gameover-screen" class="screen hidden">
+    <h2>GAME OVER</h2>
+    <div class="go-score">Score : <span id="go-score">0</span></div>
+    <div class="go-best">🏆 Meilleur : <span id="go-best">0</span></div>
+    <div class="go-coins">🪙 <span id="go-coins">0</span> coins gagnés</div>
+    <div class="btn-row">
+      <button class="big-btn" id="replayBtn">🔄 REPLAY</button>
+    </div>
+    <button class="sec-btn" id="shopBtnGO" style="margin-top:10px;">🛒 Boutique</button>
+  </div>
+
+  <!-- SHOP -->
+  <div id="shop-screen" class="screen hidden">
+    <button class="close-btn" id="closeShop">✕</button>
+    <h2>🛒 BOUTIQUE</h2>
+    <div class="shop-coins">🪙 <span id="shop-coins">0</span> coins</div>
+    <div class="upgrade-grid" id="upgrade-grid"></div>
+    <button class="big-btn" style="margin-top:24px;" id="closeShop2">Fermer</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  BALL BLAST — ENGINE COMPLET
+// ══════════════════════════════════════════════
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// ── ÉTAT GLOBAL ──────────────────────────────
+let W, H;
+let state = 'start'; // 'start' | 'playing' | 'paused' | 'gameover'
+let score = 0, coins = 0, level = 1, levelXp = 0, levelXpMax = 10;
+let highScore = 0, totalCoins = 0;
+let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
+let powerups = []; // power-ups actifs { type, endTime }
+let powerupItems = []; // power-ups visuels tombant
+let gamePhase = 'normal'; // 'normal' | 'hard' | 'boss'
+let bossRock = null; // la pierre boss de la phase finale
+let bossHits = 0; // nombre de touches sur le boss
+const BOSS_MAX_HITS = 50;
+const BOSS_START_R = 18; // rayon initial du boss
+const BOSS_MAX_R = 55;   // rayon max après 50 touches
+let phaseAnnounce = 0;   // timer d'affichage de l'annonce (frames)
+let phaseAnnounceText = '';
+
+// ── ENTITÉS ──────────────────────────────────
+let cannon, bullets, rocks, particles, floatingTexts;
+let frameCount = 0;
+let lastFireFrame = 0;
+
+// ── IMAGES PEINTES AVEC CANVAS 2D ───────────
+// (pas d'assets externes — tout est dessiné)
+
+function loadData() {
+  try {
+    const d = JSON.parse(localStorage.getItem('ballBlast2') || '{}');
+    totalCoins = d.coins || 0;
+    highScore  = d.highScore || 0;
+    upgrades   = d.upgrades || { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
+  } catch(e) {}
+}
+function saveData() {
+  localStorage.setItem('ballBlast2', JSON.stringify({
+    coins: totalCoins, highScore, upgrades
+  }));
+}
+
+// ── RESIZE ───────────────────────────────────
+function resize() {
+  const container = document.getElementById('game-container');
+  W = canvas.width  = container.clientWidth;
+  H = canvas.height = container.clientHeight;
+  if (cannon) cannon.y = H - 110;
+}
+window.addEventListener('resize', () => { resize(); });
+
+// ── INIT PARTIE ──────────────────────────────
+function initGame() {
+  score = 0; coins = 0; level = 1; levelXp = 0; levelXpMax = 10;
+  frameCount = 0; lastFireFrame = 0;
+
+  cannon = {
+    x: W/2, y: H - 110,
+    w: 64, h: 70,
+    fireFlash: 0
+  };
+
+  bullets = [];
+  rocks   = [];
+  particles = [];
+  floatingTexts = [];
+  powerups = [];
+  powerupItems = [];
+  gamePhase = 'normal';
+  bossRock = null;
+  bossHits = 0;
+  phaseAnnounce = 0;
+  phaseAnnounceText = '';
+
+  // Lance 1 ou 2 rochers
+  spawnRock(true);
+  if (level > 1) spawnRock(true);
+
+  updateHUD();
+}
+
+// ── PHASE BOSS ───────────────────────────────
+function triggerBossPhase() {
+  gamePhase = 'boss';
+  // Supprime toutes les pierres normales
+  rocks = [];
+  bullets = [];
+  bossHits = 0;
+  phaseAnnounceText = '💀 PHASE FINALE !';
+  phaseAnnounce = 240;
+
+  // Crée la petite pierre boss au centre
+  bossRock = makeBossRock(BOSS_START_R);
+}
+
+function makeBossRock(r) {
+  const [col, dark] = ['#ff2244', '#8b0000'];
+  const nv = 8;
+  const verts = buildVerts(r, nv);
+  const cracks = buildCracks(r);
+  return {
+    x: W/2, y: 80,
+    r, verts, cracks,
+    vx: (Math.random()-0.5)*3,
+    vy: 2,
+    col, dark,
+    angle: 0, av: 0.025,
+    hitFlash: 0, scaleShake: 1,
+    isBoss: true
+  };
+}
+
+function rebuildBossVerts() {
+  if (!bossRock) return;
+  bossRock.verts  = buildVerts(bossRock.r, 8);
+  bossRock.cracks = buildCracks(bossRock.r);
+}
+
+function buildVerts(r, nv) {
+  const verts = [];
+  for (let i=0; i<nv; i++) {
+    const a = (i/nv)*Math.PI*2 - Math.PI/2;
+    const rv = r*(0.8+Math.random()*0.3);
+    verts.push({ x:Math.cos(a)*rv, y:Math.sin(a)*rv });
+  }
+  return verts;
+}
+
+function buildCracks(r) {
+  const cracks = [];
+  const nc = 3 + Math.floor(Math.random()*3);
+  for (let i=0;i<nc;i++){
+    const a=Math.random()*Math.PI*2;
+    cracks.push({ x1:Math.cos(a)*r*0.1, y1:Math.sin(a)*r*0.1, x2:Math.cos(a)*r*0.7, y2:Math.sin(a)*r*0.7 });
+  }
+  return cracks;
+}
+
+// ── ROCHERS ──────────────────────────────────
+const ROCK_COLORS = [
+  ['#e74c3c','#922b21'], ['#8e44ad','#6c3483'],
+  ['#2980b9','#1a5276'], ['#d35400','#922b21'],
+  ['#16a085','#0e6655'], ['#c0392b','#7b241c'],
+  ['#7d3c98','#512e5f']
+];
+
+function spawnRock(initial=false) {
+  const size  = 40 + Math.random() * 50;
+  const r     = size / 2;
+  const baseHp = Math.ceil((level * 8 + Math.random() * level * 6) * Math.max(1, level * 0.3));
+  const [col, dark] = ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)];
+  const nv = 7 + Math.floor(Math.random() * 4);
+
+  rocks.push({
+    x: r + Math.random() * (W - r*2),
+    y: initial ? -r - Math.random()*150 : -r - 20,
+    r, verts: buildVerts(r, nv), cracks: buildCracks(r),
+    hp: baseHp, maxHp: baseHp,
+    vx: (Math.random()-0.5) * (gamePhase==='hard' ? 5 : 3),
+    vy: initial ? 1.5 : 2,
+    col, dark,
+    angle: 0, av: (Math.random()-0.5)*0.03,
+    hitFlash: 0, scaleShake: 1
+  });
+}
+
+// ── POWER-UPS ────────────────────────────────
+const POWERUP_DEFS = [
+  { type:'doubleBullet', icon:'🎯', label:'Double tir !',  col:'#3498db', duration:8000 },
+  { type:'freeze',       icon:'❄️', label:'Gel 3 sec !',   col:'#00d2ff', duration:3000 },
+  { type:'rapidFire',   icon:'🔥', label:'Rafale !',       col:'#ff6b35', duration:6000 },
+  { type:'shield',       icon:'⭐', label:'Bouclier !',    col:'#f1c40f', duration:5000 },
+];
+
+function spawnPowerupItem(x, y) {
+  const def = POWERUP_DEFS[Math.floor(Math.random()*POWERUP_DEFS.length)];
+  powerupItems.push({ x, y, vy:0, type:def.type, icon:def.icon, col:def.col, angle:0 });
+}
+
+function activatePowerup(type) {
+  const def = POWERUP_DEFS.find(d=>d.type===type);
+  if (!def) return;
+  // Retire l'ancien du même type s'il existe
+  powerups = powerups.filter(p=>p.type!==type);
+  powerups.push({ type, endTime: Date.now()+def.duration });
+  showNotif(def.icon+' '+def.label);
+  spawnFloatText(cannon.x, cannon.y-50, def.icon+' '+def.label, def.col);
+}
+
+function hasPowerup(type) {
+  return powerups.some(p=>p.type===type && Date.now()<p.endTime);
+}
+
+// ── BALLES ───────────────────────────────────
+function fireBullets() {
+  let count = upgrades.ballCount;
+  if (hasPowerup('doubleBullet')) count = count * 2;
+  const spread = 0.5 * (count - 1);
+  for (let i = 0; i < count; i++) {
+    const ox = count > 1 ? (i/(count-1) - 0.5) * spread * 20 : 0;
+    bullets.push({ x: cannon.x + ox, y: cannon.y - 30, vy: -14, vx: ox * 0.08 });
+  }
+  cannon.fireFlash = 8;
+}
+
+// ── PARTICULES ───────────────────────────────
+function boom(x, y, col, n=12) {
+  for (let i=0; i<n; i++) {
+    const a = Math.random()*Math.PI*2;
+    const sp = 2 + Math.random()*6;
+    particles.push({
+      x, y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp - 2,
+      col, r:2+Math.random()*3, life:1
+    });
+  }
+}
+function spawnFloatText(x, y, txt, col='#fff') {
+  floatingTexts.push({ x, y, txt, col, life:1.2, vy:-1.5 });
+}
+
+// ── UPDATE ────────────────────────────────────
+const GRAVITY = 0.25;
+
+function update() {
+  frameCount++;
+  if (phaseAnnounce > 0) phaseAnnounce--;
+
+  // ─ Vérification des seuils de score ─
+  if (gamePhase === 'normal' && score >= 200) {
+    triggerBossPhase();
+    return;
+  }
+  if (gamePhase === 'normal' && score >= 100) {
+    gamePhase = 'hard';
+    phaseAnnounceText = '⚡ PHASE DIFFICILE !';
+    phaseAnnounce = 180;
+    rocks.forEach(r => { r.vx *= 1.5; });
+  }
+
+  // ─ Canon ─ (position directe — collé au doigt)
+  cannon.x = Math.max(36, Math.min(W-36, cannon.x));
+  if (cannon.fireFlash > 0) cannon.fireFlash--;
+
+  // ─ Tir automatique ─
+  const fireInterval = hasPowerup('rapidFire') ? Math.max(3, 10 - upgrades.fireRate) : Math.max(6, 22 - upgrades.fireRate * 2);
+  if (frameCount - lastFireFrame >= fireInterval) {
+    fireBullets();
+    lastFireFrame = frameCount;
+  }
+
+  // ─ Balles ─
+  for (let i=bullets.length-1; i>=0; i--) {
+    const b = bullets[i];
+    b.x += b.vx; b.y += b.vy;
+    if (b.y < -20) { bullets.splice(i,1); continue; }
+  }
+
+  // ─ Rochers ─
+  const frozen = hasPowerup('freeze');
+  for (let ri=rocks.length-1; ri>=0; ri--) {
+    const rock = rocks[ri];
+    if (!frozen) {
+      rock.vy += GRAVITY;
+      rock.x  += rock.vx;
+      rock.y  += rock.vy;
+      rock.angle += rock.av;
+    }
+    if (rock.hitFlash > 0) rock.hitFlash--;
+    rock.scaleShake = 1 + Math.sin(frameCount*0.5)*0.01*(rock.hitFlash/8);
+
+    // Murs
+    if (rock.x - rock.r < 0) { rock.x = rock.r; rock.vx = Math.abs(rock.vx); }
+    if (rock.x + rock.r > W) { rock.x = W-rock.r; rock.vx = -Math.abs(rock.vx); }
+
+    // Sol — rebond
+    if (rock.y + rock.r >= H) {
+      rock.y  = H - rock.r;
+      rock.vy = -Math.sqrt(H * 0.42);
+      boom(rock.x, H, rock.col, 8);
+    }
+
+    // Collision canon → game over (bouclier protège)
+    const dx = rock.x - cannon.x, dy = rock.y - (cannon.y + 10);
+    if (Math.hypot(dx, dy) < rock.r + 28) {
+      if (hasPowerup('shield')) {
+        powerups = powerups.filter(p=>p.type!=='shield');
+        // Repousse la pierre pour éviter re-collision immédiate
+        rock.vy = -Math.sqrt(H * 0.42);
+        rock.vx = (rock.x < W/2 ? -1 : 1) * 5;
+        showNotif('⭐ Bouclier brisé !');
+        boom(cannon.x, cannon.y, '#f1c40f', 20);
+      } else {
+        triggerGameOver(); return;
+      }
+    }
+
+    // Collision balles → rochers
+    for (let bi=bullets.length-1; bi>=0; bi--) {
+      const bul = bullets[bi];
+      if (Math.hypot(rock.x-bul.x, rock.y-bul.y) < rock.r + 5) {
+        bullets.splice(bi, 1);
+        const dmg = upgrades.ballPower;
+        rock.hp -= dmg;
+        rock.hitFlash = 8;
+        score++;
+        boom(bul.x, bul.y, rock.col, 6);
+
+        if (rock.hp <= 0) {
+          const earned = Math.ceil(rock.maxHp / 5);
+          coins += earned; totalCoins += earned;
+          levelXp++;
+          spawnFloatText(rock.x, rock.y - 20, `+${earned}🪙`, '#ffd700');
+          boom(rock.x, rock.y, rock.col, 20);
+          rocks.splice(ri, 1);
+
+          // Chance de drop power-up (30%)
+          if (Math.random() < 0.30) spawnPowerupItem(rock.x, rock.y);
+
+          // Level up
+          if (levelXp >= levelXpMax) {
+            level++;
+            levelXp = 0;
+            levelXpMax = Math.ceil(levelXpMax * 1.4);
+            spawnFloatText(W/2, H/2 - 60, `LEVEL ${level}!`, '#4ade80');
+            spawnRock();
+          }
+
+          // Respawn + difficulté
+          spawnRock();
+          if (rocks.length < Math.min(2 + Math.floor(level/3), 5)) spawnRock();
+
+          saveData();
+          break;
+        }
+      }
+    }
+  }
+
+  // ─ Particules ─
+  for (let i=particles.length-1; i>=0; i--) {
+    const p=particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.12; p.life-=0.03;
+    if(p.life<=0) particles.splice(i,1);
+  }
+
+  // ─ Textes flottants ─
+  for (let i=floatingTexts.length-1; i>=0; i--) {
+    const t=floatingTexts[i];
+    t.y+=t.vy; t.life-=0.025;
+    if(t.life<=0) floatingTexts.splice(i,1);
+  }
+
+  // ─ Power-up items (tombent) ─
+  const now = Date.now();
+  for (let i=powerupItems.length-1; i>=0; i--) {
+    const p=powerupItems[i];
+    p.y += p.vy; p.vy += 0.15; p.angle += 0.04;
+    if (Math.hypot(p.x-cannon.x, p.y-cannon.y) < 40) {
+      activatePowerup(p.type);
+      powerupItems.splice(i,1);
+      continue;
+    }
+    if (p.y > H+30) powerupItems.splice(i,1);
+  }
+
+  // ─ Expiration power-ups actifs ─
+  powerups = powerups.filter(p => now < p.endTime);
+
+  // ─ Boss rock update ─
+  if (gamePhase === 'boss' && bossRock) {
+    const frozen = hasPowerup('freeze');
+    if (!frozen) {
+      bossRock.vy += GRAVITY;
+      bossRock.x  += bossRock.vx;
+      bossRock.y  += bossRock.vy;
+      bossRock.angle += bossRock.av;
+    }
+    if (bossRock.hitFlash > 0) bossRock.hitFlash--;
+    bossRock.scaleShake = 1 + Math.sin(frameCount*0.5)*0.01*(bossRock.hitFlash/8);
+
+    // Murs
+    if (bossRock.x - bossRock.r < 0) { bossRock.x = bossRock.r; bossRock.vx = Math.abs(bossRock.vx); }
+    if (bossRock.x + bossRock.r > W) { bossRock.x = W - bossRock.r; bossRock.vx = -Math.abs(bossRock.vx); }
+
+    // Sol rebond
+    if (bossRock.y + bossRock.r >= H) {
+      bossRock.y  = H - bossRock.r;
+      bossRock.vy = -Math.sqrt(H * 0.42);
+      boom(bossRock.x, H, bossRock.col, 8);
+    }
+
+    // Collision canon
+    const bdx = bossRock.x - cannon.x, bdy = bossRock.y - (cannon.y + 10);
+    if (Math.hypot(bdx, bdy) < bossRock.r + 20) {
+      if (hasPowerup('shield')) {
+        powerups = powerups.filter(p=>p.type!=='shield');
+        bossRock.vy = -Math.sqrt(H * 0.42);
+        bossRock.vx = (bossRock.x < W/2 ? -1 : 1) * 5;
+        showNotif('⭐ Bouclier brisé !');
+        boom(cannon.x, cannon.y, '#f1c40f', 20);
+      } else {
+        triggerGameOver(); return;
+      }
+    }
+
+    // Collision balles → boss
+    for (let bi=bullets.length-1; bi>=0; bi--) {
+      const bul = bullets[bi];
+      if (Math.hypot(bossRock.x-bul.x, bossRock.y-bul.y) < bossRock.r + 5) {
+        bullets.splice(bi, 1);
+        bossHits++;
+        bossRock.hitFlash = 8;
+        score++;
+        boom(bul.x, bul.y, bossRock.col, 4);
+
+        // Grandit à chaque touche
+        const growPct = bossHits / BOSS_MAX_HITS;
+        bossRock.r = BOSS_START_R + (BOSS_MAX_R - BOSS_START_R) * growPct;
+        // Régénère les vertices proportionnellement
+        rebuildBossVerts();
+
+        if (bossHits >= BOSS_MAX_HITS) {
+          // Boss explosé → retour phase normale
+          boom(bossRock.x, bossRock.y, bossRock.col, 50);
+          boom(bossRock.x-20, bossRock.y-20, '#fff', 20);
+          boom(bossRock.x+20, bossRock.y+20, '#ffd700', 20);
+          bossRock = null;
+          gamePhase = 'normal';
+          bossHits = 0;
+          const earned = 50;
+          coins += earned; totalCoins += earned;
+          spawnFloatText(W/2, H/2, `+${earned}🪙 BOSS DÉTRUIT !`, '#ffd700');
+          phaseAnnounceText = '💥 BOSS DÉTRUIT !';
+          phaseAnnounce = 180;
+          spawnRock();
+          saveData();
+          break;
+        }
+        break;
+      }
+    }
+  }
+
+  if (gamePhase === 'normal' && rocks.length === 0) spawnRock();
+
+  updateHUD();
+}
+
+// ── DRAW ─────────────────────────────────────
+// Décor pré-calculé
+let bgGrad, mountainLeft, mountainRight, groundGrad;
+
+function buildDecor() {
+  // Ciel
+  bgGrad = ctx.createLinearGradient(0,0,0,H*0.75);
+  bgGrad.addColorStop(0,'#5bb8f5');
+  bgGrad.addColorStop(0.5,'#87ceeb');
+  bgGrad.addColorStop(1,'#c5e8f7');
+
+  // Sol
+  groundGrad = ctx.createLinearGradient(0,H*0.78,0,H);
+  groundGrad.addColorStop(0,'#8DC63F');
+  groundGrad.addColorStop(0.2,'#6aab1e');
+  groundGrad.addColorStop(1,'#4a8212');
+}
+
+function drawBackground() {
+  // Ciel
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0,0,W,H);
+
+  // Nuages
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  drawCloud(W*0.18, H*0.12, 60);
+  drawCloud(W*0.55, H*0.08, 75);
+  drawCloud(W*0.78, H*0.15, 50);
+
+  // Montagnes arrière-plan
+  drawMountains();
+
+  // Forêt silhouette
+  ctx.fillStyle = '#2d5a1b';
+  for (let i=0; i<W; i+=22) {
+    const h = 30 + Math.sin(i*0.08)*18;
+    ctx.beginPath();
+    ctx.moveTo(i,H*0.76);
+    ctx.lineTo(i+11,H*0.76-h);
+    ctx.lineTo(i+22,H*0.76);
+    ctx.fill();
+  }
+
+  // Sol
+  ctx.fillStyle = groundGrad;
+  ctx.fillRect(0, H*0.76, W, H);
+
+  // Bande herbe claire
+  ctx.fillStyle = '#a6d84e';
+  ctx.fillRect(0, H*0.76, W, 10);
+}
+
+function drawCloud(cx, cy, scale) {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.scale(scale/50, scale/50);
+  ctx.beginPath();
+  ctx.arc(0,0,30,0,Math.PI*2);
+  ctx.arc(30,-10,24,0,Math.PI*2);
+  ctx.arc(-28,-5,20,0,Math.PI*2);
+  ctx.arc(55,5,18,0,Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawMountains() {
+  // Lointaines
+  ctx.fillStyle = '#b8d4e8';
+  drawMountainShape([[0,0.75],[0.1,0.45],[0.22,0.6],[0.35,0.35],[0.48,0.55],[0.6,0.3],[0.72,0.5],[0.85,0.38],[1,0.52],[1,0.75]]);
+  // Proches
+  ctx.fillStyle = '#8ab8d4';
+  drawMountainShape([[0,0.75],[0.05,0.55],[0.18,0.68],[0.28,0.5],[0.42,0.62],[0.55,0.42],[0.68,0.58],[0.78,0.45],[0.9,0.6],[1,0.5],[1,0.75]]);
+  // Neige
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(W*0.55, H*0.42); ctx.lineTo(W*0.6, H*0.3); ctx.lineTo(W*0.65, H*0.42);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(W*0.32, H*0.35); ctx.lineTo(W*0.35, H*0.26); ctx.lineTo(W*0.38, H*0.35);
+  ctx.fill();
+}
+
+function drawMountainShape(pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0]*W, pts[0][1]*H);
+  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0]*W, pts[i][1]*H);
+  ctx.fill();
+}
+
+function drawCannon() {
+  const cx = cannon.x, cy = cannon.y;
+  ctx.save();
+  ctx.translate(cx, cy);
+
+  // ── Ombre au sol ──
+  ctx.fillStyle = 'rgba(0,0,0,0.18)';
+  ctx.beginPath();
+  ctx.ellipse(0, 30, 28, 6, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // ── Châssis / base (rectangle arrondi manuellement) ──
+  const chGrad = ctx.createLinearGradient(-22, -8, 22, 8);
+  chGrad.addColorStop(0, '#5a5a5a');
+  chGrad.addColorStop(0.4, '#888');
+  chGrad.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = chGrad;
+  ctx.beginPath();
+  ctx.moveTo(-20, 4); ctx.lineTo(-20, 18);
+  ctx.lineTo(20, 18); ctx.lineTo(20, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1; ctx.stroke();
+
+  // ── Tourelle (demi-cercle sur châssis) ──
+  const turGrad = ctx.createRadialGradient(-6, -8, 2, 0, -4, 18);
+  turGrad.addColorStop(0, '#b0b0b0');
+  turGrad.addColorStop(0.5, '#707070');
+  turGrad.addColorStop(1, '#3a3a3a');
+  ctx.fillStyle = turGrad;
+  ctx.beginPath();
+  ctx.arc(0, 4, 16, Math.PI, 0);
+  ctx.lineTo(16, 4); ctx.lineTo(-16, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#222'; ctx.lineWidth = 1; ctx.stroke();
+
+  // ── Canon tube (cylindrique avec reflet) ──
+  const barrelGrad = ctx.createLinearGradient(-5, 0, 5, 0);
+  barrelGrad.addColorStop(0, '#2a2a2a');
+  barrelGrad.addColorStop(0.3, '#888');
+  barrelGrad.addColorStop(0.6, '#aaa');
+  barrelGrad.addColorStop(1, '#2a2a2a');
+  ctx.fillStyle = barrelGrad;
+  // Tube principal
+  ctx.beginPath();
+  ctx.moveTo(-5, 4);
+  ctx.lineTo(-5, -32);
+  ctx.arc(0, -32, 5, Math.PI, 0);
+  ctx.lineTo(5, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 1; ctx.stroke();
+
+  // Anneau milieu tube
+  const ringGrad = ctx.createLinearGradient(-7, 0, 7, 0);
+  ringGrad.addColorStop(0, '#333'); ringGrad.addColorStop(0.5, '#aaa'); ringGrad.addColorStop(1, '#333');
+  ctx.fillStyle = ringGrad;
+  ctx.fillRect(-7, -18, 14, 5);
+  ctx.strokeStyle='#111'; ctx.lineWidth=0.8; ctx.stroke();
+
+  // Embouchure (bouche du canon légèrement évasée)
+  ctx.fillStyle = '#222';
+  ctx.beginPath();
+  ctx.moveTo(-6, -28); ctx.lineTo(-6, -34);
+  ctx.arc(0, -34, 6, Math.PI, 0);
+  ctx.lineTo(6, -28);
+  ctx.closePath();
+  ctx.fill();
+
+  // Flash de tir
+  if (cannon.fireFlash > 0) {
+    const alpha = cannon.fireFlash / 8;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffe566';
+    ctx.shadowColor = '#ffcc00';
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.ellipse(0, -40, 5, 10, 0, 0, Math.PI*2);
+    ctx.fill();
+    // Rayons flash
+    for (let i=0; i<6; i++) {
+      const a = (i/6)*Math.PI*2;
+      ctx.beginPath();
+      ctx.moveTo(0, -40);
+      ctx.lineTo(Math.cos(a)*12, -40 + Math.sin(a)*12);
+      ctx.strokeStyle = '#ffdd00';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // ── Roues ──
+  drawWheel(-18, 20);
+  drawWheel(18, 20);
+
+  ctx.restore();
+}
+
+function drawWheel(ox, oy) {
+  ctx.save();
+  ctx.shadowBlur = 0;
+
+  // Pneu
+  const wg = ctx.createRadialGradient(ox, oy, 2, ox, oy, 13);
+  wg.addColorStop(0, '#444');
+  wg.addColorStop(0.65, '#222');
+  wg.addColorStop(1, '#111');
+  ctx.fillStyle = wg;
+  ctx.beginPath(); ctx.arc(ox, oy, 13, 0, Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#111'; ctx.lineWidth = 2; ctx.stroke();
+
+  // Jante
+  const jGrad = ctx.createRadialGradient(ox-3, oy-3, 1, ox, oy, 9);
+  jGrad.addColorStop(0, '#ccc');
+  jGrad.addColorStop(0.5, '#888');
+  jGrad.addColorStop(1, '#444');
+  ctx.fillStyle = jGrad;
+  ctx.beginPath(); ctx.arc(ox, oy, 8, 0, Math.PI*2); ctx.fill();
+
+  // Rayons
+  ctx.strokeStyle = '#555'; ctx.lineWidth = 1.5;
+  for (let i=0; i<5; i++) {
+    const a = (i/5)*Math.PI*2 + frameCount*0.018;
+    ctx.beginPath();
+    ctx.moveTo(ox + Math.cos(a)*2, oy + Math.sin(a)*2);
+    ctx.lineTo(ox + Math.cos(a)*8, oy + Math.sin(a)*8);
+    ctx.stroke();
+  }
+
+  // Centre moyeu
+  ctx.fillStyle = '#e07b1a';
+  ctx.beginPath(); ctx.arc(ox, oy, 3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffa533';
+  ctx.beginPath(); ctx.arc(ox-0.8, oy-0.8, 1.2, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawBullets() {
+  bullets.forEach(b => {
+    ctx.save();
+
+    // Trainée de mouvement
+    for (let t=1; t<=4; t++) {
+      const ty = b.y + t*5;
+      ctx.globalAlpha = 0.06 * (5-t);
+      ctx.fillStyle = '#ffcc00';
+      ctx.beginPath();
+      ctx.arc(b.x, ty, 5 - t*0.5, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Sphère principale — dégradé 3D
+    const rg = ctx.createRadialGradient(b.x-2, b.y-2, 0.5, b.x, b.y, 6);
+    rg.addColorStop(0, '#fff8cc');
+    rg.addColorStop(0.3, '#ffd700');
+    rg.addColorStop(0.7, '#cc8800');
+    rg.addColorStop(1, '#7a4800');
+    ctx.shadowColor = '#ffaa00';
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = rg;
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, 6, 0, Math.PI*2);
+    ctx.fill();
+
+    // Reflet
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.55)';
+    ctx.beginPath();
+    ctx.arc(b.x-2, b.y-2, 2, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  });
+}
+
+function drawRock(rock) {
+  ctx.save();
+  ctx.translate(rock.x, rock.y);
+  ctx.rotate(rock.angle);
+  ctx.scale(rock.scaleShake, rock.scaleShake);
+
+  // Glow autour du rocher
+  ctx.shadowColor = rock.col;
+  ctx.shadowBlur = 14;
+
+  // Forme principale
+  ctx.beginPath();
+  ctx.moveTo(rock.verts[0].x, rock.verts[0].y);
+  rock.verts.forEach(v => ctx.lineTo(v.x, v.y));
+  ctx.closePath();
+
+  // Dégradé sphérique
+  const rg = ctx.createRadialGradient(-rock.r*0.3,-rock.r*0.3,rock.r*0.05, 0,0,rock.r*1.1);
+  if (rock.hitFlash > 0) {
+    rg.addColorStop(0,'#fff');
+    rg.addColorStop(0.3,'#ffcccc');
+    rg.addColorStop(1, rock.dark);
+  } else {
+    rg.addColorStop(0,'#fff8');
+    rg.addColorStop(0.15, rock.col);
+    rg.addColorStop(1, rock.dark);
+  }
+  ctx.fillStyle = rg;
+  ctx.fill();
+
+  // Bord sombre
+  ctx.shadowBlur=0;
+  ctx.strokeStyle = rock.dark;
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  // Craquelures
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.lineWidth = 1.5;
+  rock.cracks.forEach(c => {
+    ctx.beginPath();
+    ctx.moveTo(c.x1,c.y1);
+    ctx.lineTo(c.x2,c.y2);
+    ctx.stroke();
+  });
+
+  // Reflet (highlight)
+  ctx.fillStyle = 'rgba(255,255,255,0.22)';
+  ctx.beginPath();
+  ctx.ellipse(-rock.r*0.25, -rock.r*0.3, rock.r*0.35, rock.r*0.2, -0.4, 0, Math.PI*2);
+  ctx.fill();
+
+  // ─ HP text ─
+  ctx.shadowBlur=0;
+  const hp = Math.ceil(rock.hp);
+  const label = hp >= 1000 ? (hp/1000).toFixed(1)+'K' : String(hp);
+  const fs = Math.max(12, Math.min(22, rock.r * 0.7));
+  ctx.font = `900 ${fs}px Nunito, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText(label, 1.5, 1.5);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(label, 0, 0);
+
+  ctx.restore();
+}
+
+function drawPowerupItems() {
+  powerupItems.forEach(p => {
+    ctx.save();
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.angle);
+    // Halo
+    ctx.shadowColor = p.col;
+    ctx.shadowBlur = 18;
+    // Fond cercle
+    ctx.fillStyle = p.col;
+    ctx.globalAlpha = 0.25;
+    ctx.beginPath(); ctx.arc(0,0,22,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha = 1;
+    // Bordure
+    ctx.strokeStyle = p.col;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(0,0,22,0,Math.PI*2); ctx.stroke();
+    // Icône
+    ctx.shadowBlur = 0;
+    ctx.font = '22px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(p.icon, 0, 0);
+    ctx.restore();
+  });
+}
+
+function drawActivePowerups() {
+  const now = Date.now();
+  const active = powerups.filter(p => now < p.endTime);
+  active.forEach((p, i) => {
+    const def = POWERUP_DEFS.find(d=>d.type===p.type);
+    if (!def) return;
+    const remaining = ((p.endTime - now)/1000).toFixed(1);
+    const bx = 14, by = H - 14 - i*44;
+    const bw = 120, bh = 34;
+    // Fond
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(bx, by-bh, bw, bh);
+    // Barre de temps
+    const pct = (p.endTime - now) / def.duration;
+    ctx.fillStyle = def.col;
+    ctx.fillRect(bx+2, by-bh+2, (bw-4)*pct, bh-4);
+    // Texte
+    ctx.fillStyle = '#fff';
+    ctx.font = '700 14px Nunito,sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`${def.icon} ${remaining}s`, bx+8, by-bh/2);
+  });
+}
+
+function drawParticles() {
+  particles.forEach(p => {
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.col;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+function drawFloatingTexts() {
+  floatingTexts.forEach(t => {
+    ctx.globalAlpha = Math.min(1, t.life);
+    ctx.font = '700 17px Nunito,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = t.col;
+    ctx.shadowColor = '#000';
+    ctx.shadowBlur = 4;
+    ctx.fillText(t.txt, t.x, t.y);
+  });
+  ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+}
+
+function drawScore() {
+  const label = score >= 1000 ? (score/1000).toFixed(1)+'K' : String(score);
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.font = '900 46px Nunito,sans-serif';
+  ctx.fillText(label, W/2+2, 14);
+  ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+  ctx.lineWidth = 5;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(label, W/2, 12);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(label, W/2, 12);
+  ctx.restore();
+}
+
+function drawBossRock() {
+  const rock = bossRock;
+  ctx.save();
+  ctx.translate(rock.x, rock.y);
+  ctx.rotate(rock.angle);
+  ctx.scale(rock.scaleShake, rock.scaleShake);
+
+  // Pulsation rouge menaçante
+  const pulse = 0.5 + 0.5*Math.sin(frameCount*0.08);
+  ctx.shadowColor = '#ff0000';
+  ctx.shadowBlur = 20 + pulse*20;
+
+  ctx.beginPath();
+  ctx.moveTo(rock.verts[0].x, rock.verts[0].y);
+  rock.verts.forEach(v => ctx.lineTo(v.x, v.y));
+  ctx.closePath();
+
+  const rg = ctx.createRadialGradient(-rock.r*0.3,-rock.r*0.3,rock.r*0.05, 0,0,rock.r*1.1);
+  if (rock.hitFlash > 0) {
+    rg.addColorStop(0,'#fff');
+    rg.addColorStop(0.3,'#ff8888');
+    rg.addColorStop(1,'#8b0000');
+  } else {
+    rg.addColorStop(0,'#ff9999');
+    rg.addColorStop(0.25,'#ff2244');
+    rg.addColorStop(1,'#8b0000');
+  }
+  ctx.fillStyle = rg;
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#6b0000';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Craquelures
+  ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+  ctx.lineWidth = 1.5;
+  rock.cracks.forEach(c => {
+    ctx.beginPath(); ctx.moveTo(c.x1,c.y1); ctx.lineTo(c.x2,c.y2); ctx.stroke();
+  });
+
+  // Reflet
+  ctx.fillStyle = 'rgba(255,255,255,0.2)';
+  ctx.beginPath();
+  ctx.ellipse(-rock.r*0.25,-rock.r*0.3, rock.r*0.35, rock.r*0.2, -0.4, 0, Math.PI*2);
+  ctx.fill();
+
+  // Barre de progression boss
+  ctx.shadowBlur = 0;
+  const barW = Math.max(rock.r*2, 60);
+  const pct = bossHits / BOSS_MAX_HITS;
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(-barW/2, rock.r+6, barW, 8);
+  ctx.fillStyle = `hsl(${120 - pct*120}, 90%, 50%)`;
+  ctx.fillRect(-barW/2, rock.r+6, barW*pct, 8);
+  ctx.strokeStyle = '#fff4';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(-barW/2, rock.r+6, barW, 8);
+
+  // Compteur hits
+  ctx.fillStyle = '#fff';
+  ctx.font = `900 ${Math.max(11,Math.min(18,rock.r*0.6))}px Nunito,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#000';
+  ctx.fillText(`${bossHits}/${BOSS_MAX_HITS}`, 1.5, 1.5);
+  ctx.fillStyle = '#fff';
+  ctx.fillText(`${bossHits}/${BOSS_MAX_HITS}`, 0, 0);
+
+  ctx.restore();
+}
+
+function drawPhaseAnnounce() {
+  const alpha = Math.min(1, phaseAnnounce/40) * Math.min(1, phaseAnnounce/60);
+  const isBoss = phaseAnnounceText.includes('FINALE') || phaseAnnounceText.includes('BOSS');
+  ctx.save();
+  ctx.globalAlpha = alpha;
+
+  // Fond flash
+  ctx.fillStyle = isBoss ? 'rgba(180,0,0,0.25)' : 'rgba(255,200,0,0.15)';
+  ctx.fillRect(0, 0, W, H);
+
+  // Texte principal
+  const fs = Math.min(W*0.11, 62);
+  ctx.font = `900 ${fs}px Nunito,sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Contour
+  ctx.strokeStyle = isBoss ? '#6b0000' : '#7a4800';
+  ctx.lineWidth = 8;
+  ctx.lineJoin = 'round';
+  ctx.strokeText(phaseAnnounceText, W/2, H/2);
+  // Texte
+  ctx.fillStyle = isBoss ? '#ff3355' : '#ffe066';
+  ctx.fillText(phaseAnnounceText, W/2, H/2);
+
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0,0,W,H);
+  drawBackground();
+
+  if (state === 'playing' || state === 'paused') {
+    drawBullets();
+    rocks.forEach(drawRock);
+    if (gamePhase === 'boss' && bossRock) drawBossRock();
+    drawCannon();
+    drawPowerupItems();
+    drawActivePowerups();
+    drawParticles();
+    drawFloatingTexts();
+    drawScore();
+    if (phaseAnnounce > 0) drawPhaseAnnounce();
+
+    if (state === 'paused') {
+      ctx.fillStyle = 'rgba(0,0,0,0.55)';
+      ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 38px Nunito';
+      ctx.textAlign = 'center';
+      ctx.fillText('⏸ PAUSE', W/2, H/2-10);
+      ctx.font = '18px Nunito';
+      ctx.fillStyle = '#ccc';
+      ctx.fillText('Appuie sur espace pour reprendre', W/2, H/2+25);
+    }
+  }
+}
+
+// ── HUD ──────────────────────────────────────
+function updateHUD() {
+  document.getElementById('coin-hud').textContent  = totalCoins;
+  document.getElementById('score-hud').textContent = score;
+  document.getElementById('lvl-num').textContent   = level;
+  const pct = Math.min(100, (levelXp/levelXpMax)*100);
+  document.getElementById('lvl-bar').style.width   = pct+'%';
+}
+
+// ── GAME LOOP ─────────────────────────────────
+function loop() {
+  if (state === 'playing') update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// ── GAME OVER ─────────────────────────────────
+function triggerGameOver() {
+  state = 'gameover';
+  if (score > highScore) highScore = score;
+  saveData();
+
+  document.getElementById('go-score').textContent = score;
+  document.getElementById('go-best').textContent  = highScore;
+  document.getElementById('go-coins').textContent = coins;
+  document.getElementById('hud').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+// ── SHOP ─────────────────────────────────────
+const UPGRADES_DEF = [
+  { key:'fireRate',    icon:'🔥', name:'Cadence',  desc:'Tir plus rapide',    maxLvl:10, baseCost:15 },
+  { key:'ballCount',  icon:'🎯', name:'Multitir',  desc:'Balles simultanées', maxLvl:5,  baseCost:35 },
+  { key:'ballPower',  icon:'💥', name:'Puissance', desc:'Dégâts par balle',   maxLvl:10, baseCost:20 },
+  { key:'cannonSpeed',icon:'💨', name:'Vitesse',   desc:'Canon plus rapide',  maxLvl:8,  baseCost:18 },
+];
+
+function upgradeCost(def) {
+  return Math.ceil(def.baseCost * Math.pow(1.35, upgrades[def.key]-1));
+}
+
+function renderShop() {
+  document.getElementById('shop-coins').textContent = totalCoins;
+  const grid = document.getElementById('upgrade-grid');
+  grid.innerHTML = '';
+  UPGRADES_DEF.forEach(def => {
+    const lvl  = upgrades[def.key];
+    const cost = lvl >= def.maxLvl ? null : upgradeCost(def);
+    const pct  = (lvl / def.maxLvl) * 100;
+    const card = document.createElement('div');
+    card.className = 'upg-card';
+    card.innerHTML = `
+      <div class="upg-icon">${def.icon}</div>
+      <div class="upg-name">${def.name}</div>
+      <div class="upg-lvl">Niveau ${lvl}/${def.maxLvl}</div>
+      <div class="upg-bar-bg"><div class="upg-bar-fill" style="width:${pct}%"></div></div>
+      <div class="upg-price">${cost !== null ? '🪙 '+cost : '✅ MAX'}</div>`;
+    if (cost !== null) {
+      card.addEventListener('click', () => {
+        if (totalCoins >= cost && lvl < def.maxLvl) {
+          totalCoins -= cost;
+          upgrades[def.key]++;
+          saveData();
+          renderShop();
+          showNotif(`${def.name} → Niv.${upgrades[def.key]} 🎉`);
+        } else if (totalCoins < cost) {
+          showNotif('Pas assez de coins 😅');
+        }
+      });
+    }
+    grid.appendChild(card);
+  });
+}
+
+function showShop() {
+  renderShop();
+  document.getElementById('shop-screen').classList.remove('hidden');
+}
+function hideShop() {
+  document.getElementById('shop-screen').classList.add('hidden');
+}
+
+// ── NOTIF ─────────────────────────────────────
+function showNotif(msg) {
+  const n = document.createElement('div');
+  n.className='notif'; n.textContent=msg;
+  document.body.appendChild(n);
+  setTimeout(()=>n.remove(), 2200);
+}
+
+// ── CONTRÔLES ─────────────────────────────────
+function startGame() {
+  state = 'playing';
+  document.getElementById('start-screen').classList.add('hidden');
+  document.getElementById('gameover-screen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  initGame();
+}
+
+function handleMove(clientX) {
+  if (state !== 'playing') return;
+  const rect = canvas.getBoundingClientRect();
+  cannon.x = Math.max(36, Math.min(W-36, (clientX - rect.left) * (W / rect.width)));
+}
+
+canvas.addEventListener('mousemove', e => handleMove(e.clientX));
+canvas.addEventListener('touchmove', e => { handleMove(e.touches[0].clientX); e.preventDefault(); }, { passive:false });
+canvas.addEventListener('touchstart', e => { handleMove(e.touches[0].clientX); e.preventDefault(); }, { passive:false });
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    if (state==='playing') state='paused';
+    else if (state==='paused') state='playing';
+    e.preventDefault();
+  }
+  if (state==='playing') {
+    if (e.code==='ArrowLeft')  cannon.x = Math.max(36, cannon.x - 30);
+    if (e.code==='ArrowRight') cannon.x = Math.min(W-36, cannon.x + 30);
+  }
+});
+
+document.getElementById('pause-btn').addEventListener('click', () => {
+  if (state==='playing') state='paused';
+  else if (state==='paused') state='playing';
+});
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('replayBtn').addEventListener('click', () => {
+  document.getElementById('gameover-screen').classList.add('hidden');
+  document.getElementById('hud').classList.remove('hidden');
+  startGame();
+});
+
+document.getElementById('shopBtnStart').addEventListener('click', showShop);
+document.getElementById('shopBtnGO').addEventListener('click', showShop);
+document.getElementById('closeShop').addEventListener('click', hideShop);
+document.getElementById('closeShop2').addEventListener('click', hideShop);
+
+// ── DÉMARRAGE ─────────────────────────────────
+loadData();
+resize();
+buildDecor();
+
+// Actualise l'écran de démarrage
+document.getElementById('coin-start').textContent = totalCoins;
+document.getElementById('best-start').textContent  = highScore;
+
+loop();
+</script>
+</body>
+</html>
