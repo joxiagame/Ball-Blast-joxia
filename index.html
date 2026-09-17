@@ -131,6 +131,10 @@
     text-shadow:0 2px 3px rgba(0,0,0,.22);
   }
   .big-btn:hover { filter:brightness(1.06); }
+  .hell-btn { background:linear-gradient(180deg,#ff5e3a 0%,#e01e00 55%,#8a0f00 100%) !important; box-shadow:0 6px 0 #6a0a00, 0 10px 30px rgba(255,60,10,.6), inset 0 2px 0 rgba(255,220,140,.4) !important; animation:hellPulse 1.4s ease-in-out infinite; }
+  @keyframes hellPulse { 0%,100%{ filter:brightness(1);} 50%{ filter:brightness(1.18);} }
+  .hell-lock { border-color:rgba(255,90,40,.5) !important; color:#ff9a6a !important; }
+  .hell-lock:hover { background:rgba(255,90,40,.15) !important; }
   .big-btn:active { transform:translateY(4px); box-shadow:0 2px 0 #c0392b, 0 4px 12px rgba(255,90,40,.4), inset 0 2px 0 rgba(255,255,255,.4); }
   .best-score {
     margin-top:20px;
@@ -454,6 +458,7 @@
       <div class="toggle-sw" id="frenzyToggle"><div class="toggle-knob"></div></div>
       <span>🔥 Mode Frénésie <span style="color:#ffd54a;">(coins ×2)</span></span>
     </div>
+    <div id="hell-block" style="margin-top:16px;"></div>
   </div>
 
   <!-- GAME OVER -->
@@ -604,6 +609,8 @@ let highScore = 0, totalCoins = 0;
 let dailyStreak = 0, lastClaim = '';
 let ownedSkins = ['default'], equippedSkin = 'default';
 let frenzyUnlocked = false, frenzyMode = false, coinMul = 1;
+let hellUnlocked = false, hellMode = false, env = 'day';
+const HELL_PRICE = 4000;
 let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
 
 // Skins de canon (palette métal A/B/C + moyeu de roue)
@@ -628,7 +635,7 @@ let phaseAnnounce = 0;   // timer d'affichage de l'annonce (frames)
 let phaseAnnounceText = '';
 
 // ── ENTITÉS ──────────────────────────────────
-let cannon, bullets, rocks, particles, floatingTexts;
+let cannon, bullets, rocks, particles, floatingTexts, fireballs = [];
 let frameCount = 0;
 let lastFireFrame = 0;
 
@@ -691,11 +698,12 @@ function loadData() {
     equippedSkin = d.equippedSkin || 'default';
     if (!SKINS[equippedSkin]) equippedSkin = 'default';
     frenzyUnlocked = !!d.frenzyUnlocked;
+    hellUnlocked = !!d.hellUnlocked;
   } catch(e) {}
 }
 function saveData() {
   localStorage.setItem('ballBlast2', JSON.stringify({
-    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin, frenzyUnlocked
+    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin, frenzyUnlocked, hellUnlocked
   }));
 }
 
@@ -836,12 +844,16 @@ if (window.ResizeObserver) {
 
 // ── INIT PARTIE ──────────────────────────────
 function initGame() {
-  score = 0; coins = 0; level = frenzyMode ? 4 : 1; levelXp = 0; levelXpMax = frenzyMode ? 8 : 10;
-  coinMul = frenzyMode ? 2 : 1;
+  env = hellMode ? 'hell' : 'day';
+  score = 0; coins = 0;
+  level = hellMode ? 6 : (frenzyMode ? 4 : 1);
+  levelXp = 0; levelXpMax = (hellMode || frenzyMode) ? 8 : 10;
+  coinMul = hellMode ? 3 : (frenzyMode ? 2 : 1);
   frameCount = 0; lastFireFrame = 0;
   combo = 0; comboTimer = 0; comboMult = 1;
-  bossCount = 0; nextBossScore = 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
+  bossCount = 0; nextBossScore = hellMode ? 120 : 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
   shakeMag = 0;
+  buildDecor();   // régénère le décor pour l'environnement courant
 
   cannon = {
     x: W/2, y: H - 110,
@@ -855,11 +867,14 @@ function initGame() {
   floatingTexts = [];
   powerups = [];
   powerupItems = [];
+  fireballs = [];
   gamePhase = 'normal';
   bossRock = null;
   bossHits = 0;
   phaseAnnounce = 0;
   phaseAnnounceText = '';
+
+  if (hellMode) { phaseAnnounceText = '🔥 ENFER 🔥'; phaseAnnounce = 200; }
 
   // Lance 1 ou 2 rochers
   spawnRock(true);
@@ -993,13 +1008,20 @@ const ROCK_COLORS = [
   ['#16a085','#0e6655'], ['#c0392b','#7b241c'],
   ['#7d3c98','#512e5f']
 ];
+// Palette de lave pour le Mode Enfer
+const LAVA_COLORS = [
+  ['#ff3b00','#7a1500'], ['#ff6a00','#8a2b00'],
+  ['#ff2d55','#7a0a20'], ['#ffae00','#8a4a00'], ['#d81e00','#5a0a00']
+];
 
 function spawnRock(initial=false) {
-  const spd = Math.min(2.6, 1 + (level - 1) * 0.05);   // chute/rebond de + en + rapides
+  const hot = env === 'hell';
+  const spd = Math.min(hot ? 3.4 : 2.6, (hot ? 1.35 : 1) + (level - 1) * (hot ? 0.06 : 0.05));
   const size  = 40 + Math.random() * 50;
   const r     = size / 2;
   const baseHp = Math.ceil((level * 8 + Math.random() * level * 6) * Math.max(1, level * 0.3));
-  const [col, dark] = ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)];
+  const palette = hot ? LAVA_COLORS : ROCK_COLORS;
+  const [col, dark] = palette[Math.floor(Math.random() * palette.length)];
   const nv = 7 + Math.floor(Math.random() * 4);
   const vxRange = Math.min(9, 3 + level * 0.5);         // + de déplacement latéral aux hauts niveaux
 
@@ -1167,7 +1189,7 @@ function update() {
         if (rock.hp <= 0) {
           combo++; comboTimer = 100;
           comboMult = Math.min(4, 1 + Math.floor((combo - 1) / 3) * 0.5);
-          const earned = Math.max(1, Math.ceil(rock.maxHp / 5 * comboMult * coinMul));
+          const earned = Math.max(1, Math.ceil(rock.maxHp / 7 * comboMult * coinMul));
           coins += earned; totalCoins += earned;
           missionProgress('destroy', 1);
           missionProgress('combo', combo);
@@ -1232,6 +1254,28 @@ function update() {
     const t=floatingTexts[i];
     t.y+=t.vy; t.life-=0.025;
     if(t.life<=0) floatingTexts.splice(i,1);
+  }
+
+  // ─ ENFER : pluie de boules de feu à esquiver (indestructibles) ─
+  if (env === 'hell') {
+    const interval = Math.max(38, 95 - level * 3);   // de + en + fréquent
+    if (frameCount % interval === 0) {
+      fireballs.push({ x: 20 + Math.random()*(W-40), y: -20, vy: 5.5 + Math.random()*2.5 + level*0.1, r: 12 + Math.random()*6, t: Math.random()*6 });
+    }
+    for (let i=fireballs.length-1; i>=0; i--) {
+      const f = fireballs[i];
+      f.y += f.vy; f.t += 0.3;
+      if (Math.hypot(f.x-cannon.x, f.y-(cannon.y-4)) < f.r + 24) {
+        if (hasPowerup('shield')) {
+          powerups = powerups.filter(p=>p.type!=='shield');
+          showNotif('⭐ Bouclier brisé !');
+          boom(cannon.x, cannon.y, '#ff6a00', 20);
+          fireballs.splice(i,1);
+        } else { boom(cannon.x, cannon.y, '#ff3b00', 30); triggerGameOver(); return; }
+        continue;
+      }
+      if (f.y > H + 30) fireballs.splice(i,1);
+    }
   }
 
   // ─ Power-up items (tombent) ─
@@ -1324,7 +1368,7 @@ function update() {
 
 // ── DRAW ─────────────────────────────────────
 // Décor animé : ciel + soleil + nuages parallax + collines + poussière
-let skyGrad, groundGrad, clouds = [], bgDust = [];
+let skyGrad, groundGrad, hellSky, hellGround, clouds = [], bgDust = [];
 
 function buildDecor() {
   skyGrad = ctx.createLinearGradient(0, 0, 0, H*0.82);
@@ -1337,6 +1381,17 @@ function buildDecor() {
   groundGrad.addColorStop(0, '#7ec24a');
   groundGrad.addColorStop(0.30, '#5fa62f');
   groundGrad.addColorStop(1, '#3a7616');
+
+  // Ciel & sol de l'Enfer
+  hellSky = ctx.createLinearGradient(0, 0, 0, H*0.85);
+  hellSky.addColorStop(0.00, '#1a0406');
+  hellSky.addColorStop(0.45, '#3d0a08');
+  hellSky.addColorStop(0.80, '#7a1206');
+  hellSky.addColorStop(1.00, '#c22e08');
+  hellGround = ctx.createLinearGradient(0, H*0.80, 0, H);
+  hellGround.addColorStop(0, '#ff7a12');
+  hellGround.addColorStop(0.25, '#c22400');
+  hellGround.addColorStop(1, '#3a0602');
 
   clouds = [];
   const cloudN = Math.max(4, Math.round(W/220));
@@ -1375,6 +1430,8 @@ function hillPath(baseY, amp, wl, phase, step) {
 
 function drawBackground() {
   const t = frameCount;
+
+  if (env === 'hell') { drawHellBackground(t); return; }
 
   // Ciel
   ctx.fillStyle = skyGrad;
@@ -1431,6 +1488,77 @@ function drawBackground() {
     ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2); ctx.fill();
   });
   ctx.globalAlpha = 1;
+}
+
+// Fond animé du Mode Enfer
+function drawHellBackground(t) {
+  // Ciel infernal
+  ctx.fillStyle = hellSky || '#2a0606';
+  ctx.fillRect(0,0,W,H);
+
+  // Lueur de fournaise pulsante à l'horizon
+  const glowY = H*0.80, gp = 0.6 + 0.4*Math.sin(t*0.03);
+  const gg = ctx.createRadialGradient(W/2, glowY, 20, W/2, glowY, W*0.75);
+  gg.addColorStop(0, `rgba(255,120,20,${0.5*gp})`);
+  gg.addColorStop(0.5, `rgba(200,40,0,${0.25*gp})`);
+  gg.addColorStop(1, 'rgba(120,10,0,0)');
+  ctx.fillStyle = gg; ctx.fillRect(0, H*0.4, W, H*0.6);
+
+  // Nuages de fumée sombres (réutilise les positions des nuages)
+  clouds.forEach(c => {
+    c.x += c.spd * c.depth;
+    if (c.x - 130*c.s > W) c.x = -130*c.s;
+    ctx.save();
+    ctx.globalAlpha = 0.35 + 0.25*c.depth;
+    ctx.translate(c.x, c.y*0.7); ctx.scale(60*c.s/50, 60*c.s/50);
+    ctx.fillStyle = '#20080a';
+    ctx.beginPath();
+    ctx.arc(0,0,30,0,Math.PI*2); ctx.arc(30,-10,24,0,Math.PI*2); ctx.arc(-28,-5,20,0,Math.PI*2); ctx.arc(55,5,18,0,Math.PI*2);
+    ctx.fill(); ctx.restore();
+  });
+  ctx.globalAlpha = 1;
+
+  // Montagnes déchiquetées sombres
+  ctx.fillStyle = '#1a0304';
+  jagged(H*0.70, 60, 0.10);
+  ctx.fillStyle = '#2b0605';
+  jagged(H*0.76, 42, 0.16);
+
+  // Sol de lave + veines lumineuses animées
+  ctx.fillStyle = hellGround || '#5a0e05';
+  ctx.fillRect(0, Math.floor(H*0.80), W, Math.ceil(H*0.24));
+  ctx.strokeStyle = `rgba(255,180,40,${0.5+0.3*Math.sin(t*0.05)})`;
+  ctx.lineWidth = 2;
+  for (let i=0;i<3;i++){
+    const yy = H*(0.85 + i*0.045);
+    ctx.beginPath();
+    for (let x=0;x<=W;x+=24){ ctx.lineTo(x, yy + Math.sin(x*0.03 + t*0.04 + i)*4); }
+    ctx.stroke();
+  }
+  // liseré incandescent à la surface de la lave
+  ctx.fillStyle = `rgba(255,120,20,${0.6+0.3*Math.sin(t*0.06)})`;
+  ctx.fillRect(0, Math.floor(H*0.80), W, 4);
+
+  // Braises qui montent (réutilise bgDust)
+  bgDust.forEach(d => {
+    d.y += d.vy*0.02; d.x += Math.sin(t*0.02 + d.ph)*0.4;
+    if (d.y < -5) { d.y = H*0.9; d.x = Math.random()*W; }
+    ctx.globalAlpha = d.a * (0.5 + 0.5*Math.sin(t*0.06 + d.ph));
+    ctx.fillStyle = Math.sin(d.ph) > 0 ? '#ffb028' : '#ff5a1e';
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r*1.1, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+}
+
+// Silhouette de montagnes déchiquetées (bruit sinus)
+function jagged(baseY, amp, freq) {
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x=0; x<=W; x+=14) {
+    const y = baseY - Math.abs(Math.sin(x*freq) + Math.sin(x*freq*2.3)*0.5) * amp;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
 }
 
 function drawCloud(cx, cy, scale, alpha) {
@@ -1784,6 +1912,28 @@ function drawActivePowerups() {
   });
 }
 
+function drawFireballs() {
+  fireballs.forEach(f => {
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    // trainée
+    for (let t=1;t<=5;t++){
+      ctx.globalAlpha = 0.12*(6-t);
+      ctx.fillStyle = t<3 ? '#ffd24a' : '#ff5a1e';
+      ctx.beginPath(); ctx.arc(0, -t*8, f.r*(1-t*0.12), 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    // noyau
+    const g = ctx.createRadialGradient(0,0,1, 0,0,f.r);
+    g.addColorStop(0,'#fff3b0'); g.addColorStop(0.4,'#ff9a1e'); g.addColorStop(1,'#c81e00');
+    ctx.shadowColor = '#ff5a00'; ctx.shadowBlur = 18;
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(0,0,f.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+  ctx.shadowBlur = 0;
+}
+
 function drawParticles() {
   particles.forEach(p => {
     ctx.globalAlpha = p.life;
@@ -1958,6 +2108,7 @@ function draw() {
     if (gamePhase === 'boss' && bossRock) drawBossRock();
     drawCannon();
     drawPowerupItems();
+    drawFireballs();
     drawParticles();
     drawFloatingTexts();
     ctx.restore();
@@ -2010,17 +2161,17 @@ function triggerGameOver() {
 
 // ── SHOP ─────────────────────────────────────
 const UPGRADES_DEF = [
-  { key:'fireRate',    icon:'🔥', name:'Cadence',  desc:'Tir plus rapide',    maxLvl:10, baseCost:15 },
-  { key:'ballCount',  icon:'🎯', name:'Multitir',  desc:'Balles simultanées', maxLvl:5,  baseCost:35 },
-  { key:'ballPower',  icon:'💥', name:'Puissance', desc:'Dégâts par balle',   maxLvl:10, baseCost:20 },
-  { key:'cannonSpeed',icon:'💨', name:'Vitesse',   desc:'Canon plus rapide',  maxLvl:8,  baseCost:18 },
-  { key:'pierce',     icon:'🏹', name:'Perçage',   desc:'Traverse les rochers', maxLvl:3, baseCost:70,  min:0 },
-  { key:'drone',      icon:'🤖', name:'Drone',     desc:'Tourelle auto',        maxLvl:2, baseCost:150, min:0 },
+  { key:'fireRate',    icon:'🔥', name:'Cadence',  desc:'Tir plus rapide',    maxLvl:10, baseCost:30 },
+  { key:'ballCount',  icon:'🎯', name:'Multitir',  desc:'Balles simultanées', maxLvl:5,  baseCost:80 },
+  { key:'ballPower',  icon:'💥', name:'Puissance', desc:'Dégâts par balle',   maxLvl:10, baseCost:40 },
+  { key:'cannonSpeed',icon:'💨', name:'Vitesse',   desc:'Canon plus rapide',  maxLvl:8,  baseCost:35 },
+  { key:'pierce',     icon:'🏹', name:'Perçage',   desc:'Traverse les rochers', maxLvl:3, baseCost:180, min:0 },
+  { key:'drone',      icon:'🤖', name:'Drone',     desc:'Tourelle auto',        maxLvl:2, baseCost:400, min:0 },
 ];
 
 function upgradeCost(def) {
   const min = (def.min !== undefined) ? def.min : 1;
-  return Math.ceil(def.baseCost * Math.pow(1.4, upgrades[def.key] - min));
+  return Math.ceil(def.baseCost * Math.pow(1.55, upgrades[def.key] - min));
 }
 
 function renderShop() {
@@ -2174,7 +2325,7 @@ canvas.addEventListener('touchstart', e => { handleMove(e.touches[0].clientX); e
 window.addEventListener('keydown', e => {
   if (e.code === 'Space') {
     e.preventDefault();
-    if (state === 'start') { startGame(); return; }
+    if (state === 'start') { hellMode = false; startGame(); return; }
     if (state === 'playing') { pauseGame(); return; }
     if (state === 'paused') { resumeGame(); return; }
   }
@@ -2252,6 +2403,8 @@ document.getElementById('pauseQuitBtn').addEventListener('click', () => {
   document.getElementById('coin-start').textContent = totalCoins;
   document.getElementById('best-start').textContent = highScore;
   updateDailyBtn();
+  updateHellBlock();
+  env = 'day'; buildDecor();   // le menu revient à l'ambiance jour
 });
 document.getElementById('pauseLbBtn').addEventListener('click', () => {
   document.getElementById('pause-screen').classList.add('hidden');
@@ -2259,7 +2412,7 @@ document.getElementById('pauseLbBtn').addEventListener('click', () => {
 });
 
 // Start buttons
-document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('startBtn').addEventListener('click', () => { hellMode = false; startGame(); });
 document.getElementById('replayBtn').addEventListener('click', () => {
   document.getElementById('gameover-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
@@ -2318,6 +2471,28 @@ document.getElementById('frenzyToggle').addEventListener('click', () => {
   frenzyMode = !frenzyMode;
   updateFrenzyToggle();
 });
+
+// Mode Enfer (débloqué depuis le menu principal)
+function updateHellBlock() {
+  const el = document.getElementById('hell-block'); if (!el) return;
+  if (hellUnlocked) {
+    el.innerHTML = `<button class="big-btn hell-btn" id="playHellBtn">🔥 JOUER EN ENFER</button>`;
+    document.getElementById('playHellBtn').addEventListener('click', () => { hellMode = true; startGame(); });
+  } else {
+    el.innerHTML = `<button class="sec-btn hell-lock" id="unlockHellBtn">🔒 Mode Enfer — 🪙${HELL_PRICE}</button>`;
+    document.getElementById('unlockHellBtn').addEventListener('click', unlockHell);
+  }
+}
+function unlockHell() {
+  if (hellUnlocked) return;
+  if (totalCoins < HELL_PRICE) { showNotif(`Il te faut ${HELL_PRICE} 🪙 — continue de jouer !`); return; }
+  totalCoins -= HELL_PRICE; hellUnlocked = true; saveData();
+  document.getElementById('coin-start').textContent = totalCoins;
+  Sound.resume(); Sound.boss();
+  showNotif('🔥 MODE ENFER DÉBLOQUÉ !');
+  updateHellBlock();
+}
+updateHellBlock();
 
 // Missions
 loadMissions();
