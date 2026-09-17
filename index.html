@@ -825,21 +825,41 @@ function triggerBossPhase() {
   rocks = [];
   bullets = [];
   bossHits = 0;
-  // Alterne les archétypes de boss, de plus en plus coriaces
-  bossType = (bossCount % 2 === 1) ? 'swarm' : 'grower';
+  // Alterne 3 archétypes de boss, de plus en plus coriaces
+  bossType = ['grower', 'swarm', 'splitter'][bossCount % 3];
   bossMaxHits = BOSS_MAX_HITS + bossCount * 20;
 
   if (bossType === 'swarm') {
     bossRock = null;
-    const n = 4 + Math.floor(bossCount / 2);
+    const n = 4 + Math.floor(bossCount / 3);
     for (let i = 0; i < n; i++) spawnBossSwarmRock();
     phaseAnnounceText = '🌋 ESSAIM DE BOSS !';
+  } else if (bossType === 'splitter') {
+    bossRock = null;
+    spawnSplitterRock(58 + bossCount * 3, 2, W/2);   // gros rocher, se scinde 2 fois
+    phaseAnnounceText = '🪨 TITAN !';
   } else {
     bossRock = makeBossRock(BOSS_START_R);
-    phaseAnnounceText = bossCount === 0 ? '💀 BOSS !' : `💀 BOSS ${Math.floor(bossCount/2) + 1} !`;
+    phaseAnnounceText = bossCount === 0 ? '💀 BOSS !' : `💀 BOSS ${Math.floor(bossCount/3) + 1} !`;
   }
   phaseAnnounce = 220;
   Sound.boss(); addShake(10);
+}
+
+// Titan : gros rocher qui se scinde en morceaux plus petits quand il éclate
+function spawnSplitterRock(rad, splits, x, y, vx) {
+  const nv = 7 + Math.floor(Math.random() * 4);
+  const baseHp = Math.ceil((14 + level * 5) * (1 + bossCount * 0.25) * (splits + 1));
+  rocks.push({
+    x: (x !== undefined ? x : rad + Math.random()*(W-rad*2)),
+    y: (y !== undefined ? y : -rad - 30),
+    r: rad, verts: buildVerts(rad, nv), cracks: buildCracks(rad),
+    hp: baseHp, maxHp: baseHp,
+    vx: (vx !== undefined ? vx : (Math.random()-0.5)*3), vy: 1.5,
+    col: '#a349ff', dark: '#5a1a8a',
+    angle: 0, av: (Math.random()-0.5)*0.03, hitFlash: 0, scaleShake: 1,
+    splits: splits
+  });
 }
 
 // Rocher coriace de l'essaim (menaçant, beaucoup de PV)
@@ -1112,12 +1132,21 @@ function update() {
             if (gamePhase === 'normal') spawnRock();
           }
 
-          // Respawn uniquement en phase normale (pas pendant un essaim de boss)
+          // Titan : le rocher se scinde en 2 morceaux plus petits
+          if (gamePhase === 'boss' && bossType === 'splitter' && rock.splits > 0) {
+            const childR = Math.max(16, rock.r * 0.62);
+            for (const dir of [-1, 1]) {
+              spawnSplitterRock(childR, rock.splits - 1, rock.x, rock.y, dir * (2 + Math.random()*2));
+              rocks[rocks.length - 1].vy = -3;   // léger éclatement vers le haut
+            }
+          }
+
+          // Respawn uniquement en phase normale (pas pendant un boss)
           if (gamePhase === 'normal') {
             spawnRock();
             if (rocks.length < Math.min(2 + Math.floor(level/3), 5)) spawnRock();
-          } else if (bossType === 'swarm' && rocks.length === 0) {
-            // Essaim nettoyé → boss vaincu
+          } else if ((bossType === 'swarm' || bossType === 'splitter') && rocks.length === 0) {
+            // Essaim / Titan nettoyé → boss vaincu
             boom(rock.x, rock.y, '#fff', 24);
             endBossPhase();
           }
@@ -1784,7 +1813,7 @@ function drawBossRock() {
 
 function drawPhaseAnnounce() {
   const alpha = Math.min(1, phaseAnnounce/40) * Math.min(1, phaseAnnounce/60);
-  const isBoss = /BOSS|ESSAIM|FINALE|VAINCU/.test(phaseAnnounceText);
+  const isBoss = /BOSS|ESSAIM|TITAN|FINALE|VAINCU/.test(phaseAnnounceText);
   ctx.save();
   ctx.globalAlpha = alpha;
 
