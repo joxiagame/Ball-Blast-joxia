@@ -98,13 +98,14 @@
       linear-gradient(180deg, rgba(4,10,26,0.10) 0%, rgba(4,10,26,0) 22%, rgba(6,26,10,0.10) 70%, rgba(6,26,10,0.34) 100%);
   }
   #start-screen .logo {
-    font-size:64px;
+    font-size:clamp(42px, 13vw, 66px);
     font-weight:900;
     color:#fff;
     text-shadow:0 4px 0 #c0392b, 0 5px 0 #a5311d, 0 10px 26px rgba(0,0,0,.45);
-    letter-spacing:2px;
+    letter-spacing:1px;
     margin-bottom:6px;
     transform:rotate(-2deg);
+    max-width:96vw;
   }
   #start-screen .sub {
     color:#fff;
@@ -593,6 +594,7 @@ let lastFireFrame = 0;
 let shakeMag = 0;
 let combo = 0, comboTimer = 0, comboMult = 1;
 let bossCount = 0, nextBossScore = 150, bossMaxHits = BOSS_MAX_HITS;
+let bossType = 'grower';
 
 function addShake(m) { shakeMag = Math.min(26, Math.max(shakeMag, m)); }
 
@@ -778,13 +780,18 @@ function resize() {
   if (typeof buildDecor === 'function') buildDecor();
 }
 window.addEventListener('resize', () => { resize(); });
+window.addEventListener('orientationchange', () => setTimeout(resize, 100));
+// Suit tout changement de taille du conteneur (redimensionnement du volet, etc.)
+if (window.ResizeObserver) {
+  new ResizeObserver(() => resize()).observe(document.getElementById('game-container'));
+}
 
 // ── INIT PARTIE ──────────────────────────────
 function initGame() {
   score = 0; coins = 0; level = 1; levelXp = 0; levelXpMax = 10;
   frameCount = 0; lastFireFrame = 0;
   combo = 0; comboTimer = 0; comboMult = 1;
-  bossCount = 0; nextBossScore = 150; bossMaxHits = BOSS_MAX_HITS;
+  bossCount = 0; nextBossScore = 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
   shakeMag = 0;
 
   cannon = {
@@ -815,17 +822,56 @@ function initGame() {
 // ── PHASE BOSS ───────────────────────────────
 function triggerBossPhase() {
   gamePhase = 'boss';
-  // Supprime toutes les pierres normales
   rocks = [];
   bullets = [];
   bossHits = 0;
-  bossMaxHits = BOSS_MAX_HITS + bossCount * 20;  // + coriace à chaque vague
-  phaseAnnounceText = bossCount === 0 ? '💀 BOSS !' : `💀 BOSS ${bossCount + 1} !`;
-  phaseAnnounce = 220;
+  // Alterne les archétypes de boss, de plus en plus coriaces
+  bossType = (bossCount % 2 === 1) ? 'swarm' : 'grower';
+  bossMaxHits = BOSS_MAX_HITS + bossCount * 20;
 
-  // Crée la petite pierre boss au centre
-  bossRock = makeBossRock(BOSS_START_R);
+  if (bossType === 'swarm') {
+    bossRock = null;
+    const n = 4 + Math.floor(bossCount / 2);
+    for (let i = 0; i < n; i++) spawnBossSwarmRock();
+    phaseAnnounceText = '🌋 ESSAIM DE BOSS !';
+  } else {
+    bossRock = makeBossRock(BOSS_START_R);
+    phaseAnnounceText = bossCount === 0 ? '💀 BOSS !' : `💀 BOSS ${Math.floor(bossCount/2) + 1} !`;
+  }
+  phaseAnnounce = 220;
   Sound.boss(); addShake(10);
+}
+
+// Rocher coriace de l'essaim (menaçant, beaucoup de PV)
+function spawnBossSwarmRock() {
+  const size = 46 + Math.random() * 40, r = size / 2;
+  const baseHp = Math.ceil((28 + level * 9) * (1 + bossCount * 0.3));
+  const nv = 7 + Math.floor(Math.random() * 4);
+  rocks.push({
+    x: r + Math.random() * (W - r*2), y: -r - Math.random()*220,
+    r, verts: buildVerts(r, nv), cracks: buildCracks(r),
+    hp: baseHp, maxHp: baseHp,
+    vx: (Math.random()-0.5) * 4, vy: 1.5,
+    col: '#ff2e4d', dark: '#8b0000',
+    angle: 0, av: (Math.random()-0.5)*0.03, hitFlash: 0, scaleShake: 1
+  });
+}
+
+// Fin de phase boss (récompense + retour au jeu normal) — commune à tous les types
+function endBossPhase() {
+  bossCount++;
+  missionProgress('boss', 1);
+  nextBossScore = score + 150 + bossCount * 120;
+  const earned = 50 + bossCount * 40;
+  coins += earned; totalCoins += earned;
+  spawnFloatText(W/2, H/2, `+${earned}🪙 BOSS VAINCU !`, '#ffd700');
+  phaseAnnounceText = '💥 BOSS VAINCU !';
+  phaseAnnounce = 180;
+  Sound.boss(); Sound.level(); addShake(22);
+  gamePhase = 'normal';
+  bossRock = null; bossHits = 0;
+  spawnRock();
+  saveData();
 }
 
 function makeBossRock(r) {
@@ -1063,12 +1109,18 @@ function update() {
             spawnFloatText(W/2, H/2 - 60, `LEVEL ${level}!`, '#4ade80');
             Sound.level(); addShake(4);
             missionProgress('level', level);
-            spawnRock();
+            if (gamePhase === 'normal') spawnRock();
           }
 
-          // Respawn + difficulté
-          spawnRock();
-          if (rocks.length < Math.min(2 + Math.floor(level/3), 5)) spawnRock();
+          // Respawn uniquement en phase normale (pas pendant un essaim de boss)
+          if (gamePhase === 'normal') {
+            spawnRock();
+            if (rocks.length < Math.min(2 + Math.floor(level/3), 5)) spawnRock();
+          } else if (bossType === 'swarm' && rocks.length === 0) {
+            // Essaim nettoyé → boss vaincu
+            boom(rock.x, rock.y, '#fff', 24);
+            endBossPhase();
+          }
 
           saveData();
           break;
@@ -1162,24 +1214,11 @@ function update() {
         rebuildBossVerts();
 
         if (bossHits >= bossMaxHits) {
-          // Boss explosé → retour phase normale, prochaine vague plus loin
+          // Boss explosé → récompense + retour phase normale
           boom(bossRock.x, bossRock.y, bossRock.col, 50);
           boom(bossRock.x-20, bossRock.y-20, '#fff', 20);
           boom(bossRock.x+20, bossRock.y+20, '#ffd700', 20);
-          Sound.boss(); Sound.level(); addShake(22);
-          bossRock = null;
-          gamePhase = 'normal';
-          bossHits = 0;
-          bossCount++;
-          missionProgress('boss', 1);
-          nextBossScore = score + 150 + bossCount * 120;
-          const earned = 50 + bossCount * 40;
-          coins += earned; totalCoins += earned;
-          spawnFloatText(W/2, H/2, `+${earned}🪙 BOSS DÉTRUIT !`, '#ffd700');
-          phaseAnnounceText = '💥 BOSS DÉTRUIT !';
-          phaseAnnounce = 180;
-          spawnRock();
-          saveData();
+          endBossPhase();
           break;
         }
         break;
@@ -1203,9 +1242,9 @@ function buildDecor() {
   skyGrad.addColorStop(0.72, '#79c0f5');
   skyGrad.addColorStop(1.00, '#cdeeff');
 
-  groundGrad = ctx.createLinearGradient(0, H*0.77, 0, H);
+  groundGrad = ctx.createLinearGradient(0, H*0.74, 0, H);
   groundGrad.addColorStop(0, '#7ec24a');
-  groundGrad.addColorStop(0.28, '#5fa62f');
+  groundGrad.addColorStop(0.30, '#5fa62f');
   groundGrad.addColorStop(1, '#3a7616');
 
   clouds = [];
@@ -1277,20 +1316,20 @@ function drawBackground() {
     drawCloud(c.x, c.y, 60*c.s, 0.5 + 0.4*c.depth);
   });
 
-  // Collines parallax (arrière → avant), qui ondulent très lentement
+  // Collines lointaines (silhouettes sur l'horizon)
   ctx.fillStyle = '#a6d688'; hillPath(H*0.64, 24, 160, t*0.0011);
   ctx.fillStyle = '#82c25c'; hillPath(H*0.71, 30, 125, t*0.0017 + 2);
 
-  // Sol
+  // Sol plein — couvre tout le bas (full-bleed, aucun bord vide possible)
   ctx.fillStyle = groundGrad;
-  ctx.fillRect(0, H*0.77, W, H*0.25);
+  ctx.fillRect(0, Math.floor(H*0.74), W, Math.ceil(H*0.30));
 
   // Colline de premier plan qui fond dans le sol
-  ctx.fillStyle = '#57a52f'; hillPath(H*0.81, 15, 95, t*0.0024 + 4);
+  ctx.fillStyle = '#57a52f'; hillPath(H*0.82, 15, 95, t*0.0024 + 4);
 
-  // Bande d'herbe claire à l'horizon du sol
-  ctx.fillStyle = 'rgba(190,230,130,0.55)';
-  ctx.fillRect(0, H*0.77, W, 5);
+  // Liseré d'herbe claire à l'horizon
+  ctx.fillStyle = 'rgba(190,230,130,0.5)';
+  ctx.fillRect(0, Math.floor(H*0.74), W, 4);
 
   // Poussière lumineuse ambiante
   bgDust.forEach(d => {
@@ -1308,16 +1347,26 @@ function drawCloud(cx, cy, scale, alpha) {
   ctx.globalAlpha = alpha;
   ctx.translate(cx, cy);
   ctx.scale(scale/50, scale/50);
-  // ombre douce
-  ctx.fillStyle = 'rgba(175,205,232,0.5)';
-  ctx.beginPath();
-  ctx.arc(0,6,30,0,Math.PI*2); ctx.arc(30,-4,24,0,Math.PI*2); ctx.arc(-28,1,20,0,Math.PI*2); ctx.arc(55,11,18,0,Math.PI*2);
-  ctx.fill();
-  // corps blanc
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(0,0,30,0,Math.PI*2); ctx.arc(30,-10,24,0,Math.PI*2); ctx.arc(-28,-5,20,0,Math.PI*2); ctx.arc(55,5,18,0,Math.PI*2);
-  ctx.fill();
+  // lobes (bas alignés pour un dessous plat façon cumulus)
+  const lobes = [[-42,6,17],[-22,-6,25],[4,-15,31],[30,-7,25],[50,4,18],[10,8,29]];
+  const puff = (dy) => {
+    ctx.beginPath();
+    lobes.forEach(([x,y,r]) => { ctx.moveTo(x+r, y+dy); ctx.arc(x, y+dy, r, 0, Math.PI*2); });
+    ctx.fill();
+  };
+  // ombre portée douce
+  ctx.fillStyle = 'rgba(140,178,218,0.28)';
+  puff(8);
+  // corps : dégradé vertical blanc -> bleu très clair (volume)
+  const g = ctx.createLinearGradient(0, -34, 0, 24);
+  g.addColorStop(0, '#ffffff');
+  g.addColorStop(1, '#d9e8f7');
+  ctx.fillStyle = g;
+  puff(0);
+  // reflet lumineux en haut
+  ctx.globalAlpha = alpha * 0.9;
+  ctx.fillStyle = 'rgba(255,255,255,0.95)';
+  ctx.beginPath(); ctx.ellipse(-6, -16, 20, 11, -0.15, 0, Math.PI*2); ctx.fill();
   ctx.restore();
 }
 
@@ -1735,7 +1784,7 @@ function drawBossRock() {
 
 function drawPhaseAnnounce() {
   const alpha = Math.min(1, phaseAnnounce/40) * Math.min(1, phaseAnnounce/60);
-  const isBoss = phaseAnnounceText.includes('FINALE') || phaseAnnounceText.includes('BOSS');
+  const isBoss = /BOSS|ESSAIM|FINALE|VAINCU/.test(phaseAnnounceText);
   ctx.save();
   ctx.globalAlpha = alpha;
 
