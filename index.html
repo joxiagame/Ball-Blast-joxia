@@ -227,6 +227,19 @@
   .upg-bar-bg { width:100%; height:7px; background:rgba(255,255,255,.15); border-radius:5px; margin:8px 0; overflow:hidden; }
   .upg-bar-fill { height:100%; background:linear-gradient(90deg,#4ecdc4,#44a08d); border-radius:5px; }
   .upg-price { display:inline-block; margin-top:4px; color:#0a1a14; background:linear-gradient(135deg,#ffd93d,#f6a500); font-weight:800; font-size:13px; padding:5px 13px; border-radius:14px; box-shadow:0 2px 0 #b57900; }
+
+  /* ── SKINS DE CANON ── */
+  .shop-subtitle { color:#4ecdc4; font-size:16px; font-weight:800; letter-spacing:1px; margin:22px 0 12px; }
+  .skin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:420px; }
+  .skin-card { background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.14); border-radius:16px; padding:12px 8px; text-align:center; transition:border-color .15s; }
+  .skin-card.skin-equipped { border-color:#4ade80; box-shadow:0 0 16px rgba(74,222,128,.25); }
+  .skin-swatch { width:46px; height:46px; margin:0 auto 8px; border-radius:12px; position:relative; box-shadow:inset 0 2px 4px rgba(255,255,255,.35), 0 3px 8px rgba(0,0,0,.35); }
+  .skin-swatch span { position:absolute; width:12px; height:12px; border-radius:50%; left:50%; top:58%; transform:translate(-50%,-50%); box-shadow:0 0 6px rgba(0,0,0,.4); }
+  .skin-name { color:#fff; font-weight:700; font-size:13px; margin-bottom:8px; }
+  .skin-btn { font-family:'Nunito',sans-serif; font-weight:800; font-size:12px; color:#0a1a14; background:linear-gradient(135deg,#ffd93d,#f6a500); border:none; border-radius:14px; padding:6px 10px; cursor:pointer; box-shadow:0 2px 0 #b57900; }
+  .skin-btn:active { transform:translateY(2px); box-shadow:0 0 0 #b57900; }
+  .skin-btn.skin-buy { min-width:60px; }
+  .skin-state { color:#4ade80; font-weight:800; font-size:12px; padding:6px 0; }
   .close-btn {
     position:absolute;
     top:14px; right:14px;
@@ -453,6 +466,8 @@
     <h2>🛒 BOUTIQUE</h2>
     <div class="shop-coins">🪙 <span id="shop-coins">0</span> coins</div>
     <div class="upgrade-grid" id="upgrade-grid"></div>
+    <h3 class="shop-subtitle">🎨 SKINS DE CANON</h3>
+    <div class="skin-grid" id="skin-grid"></div>
     <button class="big-btn" style="margin-top:24px;" id="closeShop2">Fermer</button>
   </div>
 
@@ -573,7 +588,19 @@ let state = 'start'; // 'start' | 'playing' | 'paused' | 'gameover'
 let score = 0, coins = 0, level = 1, levelXp = 0, levelXpMax = 10;
 let highScore = 0, totalCoins = 0;
 let dailyStreak = 0, lastClaim = '';
+let ownedSkins = ['default'], equippedSkin = 'default';
 let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
+
+// Skins de canon (palette métal A/B/C + moyeu de roue)
+const SKINS = {
+  default:  { name:'Classique', price:0,   metalA:'#b0b0b0', metalB:'#707070', metalC:'#3a3a3a', hub:'#e07b1a', hub2:'#ffa533' },
+  gold:     { name:'Or',        price:300, metalA:'#ffe08a', metalB:'#d9a520', metalC:'#7a4e0a', hub:'#fff3c0', hub2:'#ffd700' },
+  neon:     { name:'Néon',      price:500, metalA:'#8ff7ff', metalB:'#1fb6c9', metalC:'#0a4a55', hub:'#c0fff8', hub2:'#39ffe0' },
+  military: { name:'Militaire', price:400, metalA:'#9fb377', metalB:'#5b7040', metalC:'#2b3620', hub:'#d0dfa0', hub2:'#a8b868' },
+  candy:    { name:'Bonbon',    price:450, metalA:'#ffb3d9', metalB:'#ff5ea8', metalC:'#93174f', hub:'#fff0f6', hub2:'#ff8ac2' },
+  shadow:   { name:'Ombre',     price:650, metalA:'#7a7a8c', metalB:'#33333f', metalC:'#131318', hub:'#b79bff', hub2:'#8a5cff' },
+};
+function curSkin() { return SKINS[equippedSkin] || SKINS.default; }
 let powerups = []; // power-ups actifs { type, endTime }
 let powerupItems = []; // power-ups visuels tombant
 let gamePhase = 'normal'; // 'normal' | 'hard' | 'boss'
@@ -643,11 +670,14 @@ function loadData() {
     upgrades   = d.upgrades || { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
     dailyStreak = d.dailyStreak || 0;
     lastClaim   = d.lastClaim || '';
+    ownedSkins  = d.ownedSkins || ['default'];
+    equippedSkin = d.equippedSkin || 'default';
+    if (!SKINS[equippedSkin]) equippedSkin = 'default';
   } catch(e) {}
 }
 function saveData() {
   localStorage.setItem('ballBlast2', JSON.stringify({
-    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim
+    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin
   }));
 }
 
@@ -1401,6 +1431,7 @@ function drawCloud(cx, cy, scale, alpha) {
 
 function drawCannon() {
   const cx = cannon.x, cy = cannon.y;
+  const sk = curSkin();
   ctx.save();
   ctx.translate(cx, cy);
 
@@ -1412,9 +1443,9 @@ function drawCannon() {
 
   // ── Châssis / base (rectangle arrondi manuellement) ──
   const chGrad = ctx.createLinearGradient(-22, -8, 22, 8);
-  chGrad.addColorStop(0, '#5a5a5a');
-  chGrad.addColorStop(0.4, '#888');
-  chGrad.addColorStop(1, '#3a3a3a');
+  chGrad.addColorStop(0, sk.metalB);
+  chGrad.addColorStop(0.4, sk.metalA);
+  chGrad.addColorStop(1, sk.metalC);
   ctx.fillStyle = chGrad;
   ctx.beginPath();
   ctx.moveTo(-20, 4); ctx.lineTo(-20, 18);
@@ -1425,9 +1456,9 @@ function drawCannon() {
 
   // ── Tourelle (demi-cercle sur châssis) ──
   const turGrad = ctx.createRadialGradient(-6, -8, 2, 0, -4, 18);
-  turGrad.addColorStop(0, '#b0b0b0');
-  turGrad.addColorStop(0.5, '#707070');
-  turGrad.addColorStop(1, '#3a3a3a');
+  turGrad.addColorStop(0, sk.metalA);
+  turGrad.addColorStop(0.5, sk.metalB);
+  turGrad.addColorStop(1, sk.metalC);
   ctx.fillStyle = turGrad;
   ctx.beginPath();
   ctx.arc(0, 4, 16, Math.PI, 0);
@@ -1438,10 +1469,10 @@ function drawCannon() {
 
   // ── Canon tube (cylindrique avec reflet) ──
   const barrelGrad = ctx.createLinearGradient(-5, 0, 5, 0);
-  barrelGrad.addColorStop(0, '#2a2a2a');
-  barrelGrad.addColorStop(0.3, '#888');
-  barrelGrad.addColorStop(0.6, '#aaa');
-  barrelGrad.addColorStop(1, '#2a2a2a');
+  barrelGrad.addColorStop(0, sk.metalC);
+  barrelGrad.addColorStop(0.3, sk.metalB);
+  barrelGrad.addColorStop(0.6, sk.metalA);
+  barrelGrad.addColorStop(1, sk.metalC);
   ctx.fillStyle = barrelGrad;
   // Tube principal
   ctx.beginPath();
@@ -1455,7 +1486,7 @@ function drawCannon() {
 
   // Anneau milieu tube
   const ringGrad = ctx.createLinearGradient(-7, 0, 7, 0);
-  ringGrad.addColorStop(0, '#333'); ringGrad.addColorStop(0.5, '#aaa'); ringGrad.addColorStop(1, '#333');
+  ringGrad.addColorStop(0, sk.metalC); ringGrad.addColorStop(0.5, sk.metalA); ringGrad.addColorStop(1, sk.metalC);
   ctx.fillStyle = ringGrad;
   ctx.fillRect(-7, -18, 14, 5);
   ctx.strokeStyle='#111'; ctx.lineWidth=0.8; ctx.stroke();
@@ -1531,10 +1562,11 @@ function drawWheel(ox, oy) {
     ctx.stroke();
   }
 
-  // Centre moyeu
-  ctx.fillStyle = '#e07b1a';
+  // Centre moyeu (couleur du skin)
+  const sk = curSkin();
+  ctx.fillStyle = sk.hub;
   ctx.beginPath(); ctx.arc(ox, oy, 3, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#ffa533';
+  ctx.fillStyle = sk.hub2;
   ctx.beginPath(); ctx.arc(ox-0.8, oy-0.8, 1.2, 0, Math.PI*2); ctx.fill();
 
   ctx.restore();
@@ -1966,6 +1998,44 @@ function renderShop() {
     }
     grid.appendChild(card);
   });
+  renderSkins();
+}
+
+function renderSkins() {
+  const grid = document.getElementById('skin-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  Object.entries(SKINS).forEach(([id, sk]) => {
+    const owned = ownedSkins.includes(id);
+    const equipped = equippedSkin === id;
+    const card = document.createElement('div');
+    card.className = 'skin-card' + (equipped ? ' skin-equipped' : '');
+    const swatch = `<div class="skin-swatch" style="background:linear-gradient(135deg,${sk.metalA},${sk.metalC})"><span style="background:${sk.hub2}"></span></div>`;
+    const action = equipped
+      ? `<div class="skin-state">✅ Équipé</div>`
+      : owned
+        ? `<button class="skin-btn" data-eq="${id}">Équiper</button>`
+        : `<button class="skin-btn skin-buy" data-buy="${id}">🪙 ${sk.price}</button>`;
+    card.innerHTML = `${swatch}<div class="skin-name">${sk.name}</div>${action}`;
+    grid.appendChild(card);
+  });
+  grid.querySelectorAll('[data-eq]').forEach(b => b.addEventListener('click', () => {
+    equippedSkin = b.dataset.eq; saveData(); renderShop();
+  }));
+  grid.querySelectorAll('[data-buy]').forEach(b => b.addEventListener('click', () => buySkin(b.dataset.buy)));
+}
+
+function buySkin(id) {
+  const sk = SKINS[id];
+  if (!sk || ownedSkins.includes(id)) return;
+  if (totalCoins < sk.price) { showNotif('Pas assez de coins 😅'); return; }
+  totalCoins -= sk.price;
+  ownedSkins.push(id);
+  equippedSkin = id;
+  saveData();
+  Sound.resume(); Sound.coin();
+  showNotif(`${sk.name} débloqué ! 🎉`);
+  renderShop();
 }
 
 function showShop() {
