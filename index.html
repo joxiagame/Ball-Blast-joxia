@@ -757,6 +757,7 @@ function resize() {
   W = canvas.width  = container.clientWidth;
   H = canvas.height = container.clientHeight;
   if (cannon) cannon.y = H - 110;
+  if (typeof buildDecor === 'function') buildDecor();
 }
 window.addEventListener('resize', () => { resize(); });
 
@@ -1174,103 +1175,132 @@ function update() {
 }
 
 // ── DRAW ─────────────────────────────────────
-// Décor pré-calculé
-let bgGrad, mountainLeft, mountainRight, groundGrad;
+// Décor animé : ciel + soleil + nuages parallax + collines + poussière
+let skyGrad, groundGrad, clouds = [], bgDust = [];
 
 function buildDecor() {
-  // Ciel
-  bgGrad = ctx.createLinearGradient(0,0,0,H*0.75);
-  bgGrad.addColorStop(0,'#5bb8f5');
-  bgGrad.addColorStop(0.5,'#87ceeb');
-  bgGrad.addColorStop(1,'#c5e8f7');
+  skyGrad = ctx.createLinearGradient(0, 0, 0, H*0.82);
+  skyGrad.addColorStop(0.00, '#1f76d8');
+  skyGrad.addColorStop(0.38, '#3f97e8');
+  skyGrad.addColorStop(0.72, '#79c0f5');
+  skyGrad.addColorStop(1.00, '#cdeeff');
 
-  // Sol
-  groundGrad = ctx.createLinearGradient(0,H*0.78,0,H);
-  groundGrad.addColorStop(0,'#8DC63F');
-  groundGrad.addColorStop(0.2,'#6aab1e');
-  groundGrad.addColorStop(1,'#4a8212');
+  groundGrad = ctx.createLinearGradient(0, H*0.77, 0, H);
+  groundGrad.addColorStop(0, '#7ec24a');
+  groundGrad.addColorStop(0.28, '#5fa62f');
+  groundGrad.addColorStop(1, '#3a7616');
+
+  clouds = [];
+  const cloudN = Math.max(4, Math.round(W/220));
+  for (let i=0; i<cloudN; i++) {
+    clouds.push({
+      x: Math.random()*W, y: H*(0.05 + Math.random()*0.32),
+      s: 0.6 + Math.random()*0.9,
+      spd: 0.12 + Math.random()*0.22,
+      depth: 0.5 + Math.random()*0.5
+    });
+  }
+
+  bgDust = [];
+  const dustN = Math.round((W*H)/26000);
+  for (let i=0; i<dustN; i++) {
+    bgDust.push({
+      x: Math.random()*W, y: Math.random()*H*0.82,
+      r: 0.6 + Math.random()*2.2,
+      vy: -(4 + Math.random()*10),
+      a: 0.12 + Math.random()*0.38, ph: Math.random()*6.28
+    });
+  }
+}
+
+// Colline ondulée remplie (deux harmoniques sinus)
+function hillPath(baseY, amp, wl, phase, step) {
+  step = step || 18;
+  ctx.beginPath();
+  ctx.moveTo(0, H);
+  for (let x=0; x<=W; x+=step) {
+    const y = baseY + Math.sin(x/wl + phase)*amp + Math.sin(x/(wl*0.5) + phase*1.7)*amp*0.35;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
 }
 
 function drawBackground() {
+  const t = frameCount;
+
   // Ciel
-  ctx.fillStyle = bgGrad;
+  ctx.fillStyle = skyGrad;
   ctx.fillRect(0,0,W,H);
 
-  // Soleil avec halo doux
-  const sunX = W*0.8, sunY = H*0.14, sunR = 42;
-  const sg = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR*3.6);
-  sg.addColorStop(0, 'rgba(255,248,205,0.95)');
-  sg.addColorStop(0.22, 'rgba(255,238,150,0.45)');
-  sg.addColorStop(1, 'rgba(255,238,150,0)');
-  ctx.fillStyle = sg;
-  ctx.beginPath(); ctx.arc(sunX, sunY, sunR*3.6, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = '#fff7cc';
-  ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI*2); ctx.fill();
-
-  // Nuages
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  drawCloud(W*0.18, H*0.12, 60);
-  drawCloud(W*0.55, H*0.08, 75);
-  drawCloud(W*0.78, H*0.15, 50);
-
-  // Montagnes arrière-plan
-  drawMountains();
-
-  // Forêt silhouette
-  ctx.fillStyle = '#2d5a1b';
-  for (let i=0; i<W; i+=22) {
-    const h = 30 + Math.sin(i*0.08)*18;
+  // Soleil : rayons tournants + halo pulsant + disque
+  const sunX = W*0.80, sunY = H*0.15, sunR = 40, pulse = 1 + Math.sin(t*0.02)*0.06;
+  ctx.save();
+  ctx.translate(sunX, sunY); ctx.rotate(t*0.0015);
+  ctx.strokeStyle = 'rgba(255,244,190,0.16)'; ctx.lineWidth = 3;
+  for (let i=0; i<12; i++) {
+    const a = (i/12)*Math.PI*2;
     ctx.beginPath();
-    ctx.moveTo(i,H*0.76);
-    ctx.lineTo(i+11,H*0.76-h);
-    ctx.lineTo(i+22,H*0.76);
-    ctx.fill();
+    ctx.moveTo(Math.cos(a)*sunR*1.7, Math.sin(a)*sunR*1.7);
+    ctx.lineTo(Math.cos(a)*sunR*2.6, Math.sin(a)*sunR*2.6);
+    ctx.stroke();
   }
+  ctx.restore();
+  const sg = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR*3.6*pulse);
+  sg.addColorStop(0, 'rgba(255,250,220,0.95)');
+  sg.addColorStop(0.22, 'rgba(255,240,160,0.5)');
+  sg.addColorStop(1, 'rgba(255,240,160,0)');
+  ctx.fillStyle = sg; ctx.beginPath(); ctx.arc(sunX, sunY, sunR*3.6*pulse, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff6d0'; ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI*2); ctx.fill();
+
+  // Nuages parallax (dérive + wrap)
+  clouds.forEach(c => {
+    c.x += c.spd * c.depth;
+    if (c.x - 130*c.s > W) c.x = -130*c.s;
+    drawCloud(c.x, c.y, 60*c.s, 0.5 + 0.4*c.depth);
+  });
+
+  // Collines parallax (arrière → avant), qui ondulent très lentement
+  ctx.fillStyle = '#a6d688'; hillPath(H*0.64, 24, 160, t*0.0011);
+  ctx.fillStyle = '#82c25c'; hillPath(H*0.71, 30, 125, t*0.0017 + 2);
 
   // Sol
   ctx.fillStyle = groundGrad;
-  ctx.fillRect(0, H*0.76, W, H);
+  ctx.fillRect(0, H*0.77, W, H*0.25);
 
-  // Bande herbe claire
-  ctx.fillStyle = '#a6d84e';
-  ctx.fillRect(0, H*0.76, W, 10);
+  // Colline de premier plan qui fond dans le sol
+  ctx.fillStyle = '#57a52f'; hillPath(H*0.81, 15, 95, t*0.0024 + 4);
+
+  // Bande d'herbe claire à l'horizon du sol
+  ctx.fillStyle = 'rgba(190,230,130,0.55)';
+  ctx.fillRect(0, H*0.77, W, 5);
+
+  // Poussière lumineuse ambiante
+  bgDust.forEach(d => {
+    d.y += d.vy*0.016; d.x += Math.sin(t*0.01 + d.ph)*0.3;
+    if (d.y < -5) { d.y = H*0.85; d.x = Math.random()*W; }
+    ctx.globalAlpha = d.a * (0.55 + 0.45*Math.sin(t*0.05 + d.ph));
+    ctx.fillStyle = '#fffbe0';
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
 }
 
-function drawCloud(cx, cy, scale) {
+function drawCloud(cx, cy, scale, alpha) {
   ctx.save();
+  ctx.globalAlpha = alpha;
   ctx.translate(cx, cy);
   ctx.scale(scale/50, scale/50);
+  // ombre douce
+  ctx.fillStyle = 'rgba(175,205,232,0.5)';
   ctx.beginPath();
-  ctx.arc(0,0,30,0,Math.PI*2);
-  ctx.arc(30,-10,24,0,Math.PI*2);
-  ctx.arc(-28,-5,20,0,Math.PI*2);
-  ctx.arc(55,5,18,0,Math.PI*2);
+  ctx.arc(0,6,30,0,Math.PI*2); ctx.arc(30,-4,24,0,Math.PI*2); ctx.arc(-28,1,20,0,Math.PI*2); ctx.arc(55,11,18,0,Math.PI*2);
+  ctx.fill();
+  // corps blanc
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0,0,30,0,Math.PI*2); ctx.arc(30,-10,24,0,Math.PI*2); ctx.arc(-28,-5,20,0,Math.PI*2); ctx.arc(55,5,18,0,Math.PI*2);
   ctx.fill();
   ctx.restore();
-}
-
-function drawMountains() {
-  // Lointaines
-  ctx.fillStyle = '#b8d4e8';
-  drawMountainShape([[0,0.75],[0.1,0.45],[0.22,0.6],[0.35,0.35],[0.48,0.55],[0.6,0.3],[0.72,0.5],[0.85,0.38],[1,0.52],[1,0.75]]);
-  // Proches
-  ctx.fillStyle = '#8ab8d4';
-  drawMountainShape([[0,0.75],[0.05,0.55],[0.18,0.68],[0.28,0.5],[0.42,0.62],[0.55,0.42],[0.68,0.58],[0.78,0.45],[0.9,0.6],[1,0.5],[1,0.75]]);
-  // Neige
-  ctx.fillStyle = 'rgba(255,255,255,0.7)';
-  ctx.beginPath();
-  ctx.moveTo(W*0.55, H*0.42); ctx.lineTo(W*0.6, H*0.3); ctx.lineTo(W*0.65, H*0.42);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(W*0.32, H*0.35); ctx.lineTo(W*0.35, H*0.26); ctx.lineTo(W*0.38, H*0.35);
-  ctx.fill();
-}
-
-function drawMountainShape(pts) {
-  ctx.beginPath();
-  ctx.moveTo(pts[0][0]*W, pts[0][1]*H);
-  for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0]*W, pts[i][1]*H);
-  ctx.fill();
 }
 
 function drawCannon() {
