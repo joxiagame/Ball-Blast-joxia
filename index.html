@@ -56,14 +56,22 @@
   #lvl-box { flex-direction:column; gap:2px; min-width:80px; }
   #lvl-bar-bg { width:100%; height:7px; background:rgba(255,255,255,.25); border-radius:10px; }
   #lvl-bar { height:100%; background:#4ade80; border-radius:10px; transition:width .3s; }
-  #pause-btn {
+  #play-controls {
+    position:fixed; top:60px; right:12px; z-index:150;
+    display:flex; gap:8px; pointer-events:none;
+  }
+  #play-controls.hidden { display:none; }
+  #play-controls .hud-icon-btn { pointer-events:all; }
+  .hud-icon-btn {
     background:rgba(255,255,255,.22);
     border:2px solid rgba(255,255,255,.4);
     border-radius:12px;
     width:42px; height:42px;
     display:flex; align-items:center; justify-content:center;
     cursor:pointer; pointer-events:all; font-size:18px;
+    transition:background .15s, transform .1s;
   }
+  .hud-icon-btn:active { transform:scale(.92); background:rgba(255,255,255,.35); }
 
   /* ── SCREENS ── */
   .screen {
@@ -335,7 +343,12 @@
     </div>
     <div class="hud-box"><span class="icon">🪙</span><span id="coin-hud">0</span></div>
     <div class="hud-box"><span class="icon">💎</span><span id="score-hud">0</span></div>
-    <div id="pause-btn" style="background:rgba(255,255,255,.22);border:2px solid rgba(255,255,255,.4);border-radius:12px;width:42px;height:42px;display:flex;align-items:center;justify-content:center;cursor:pointer;pointer-events:all;font-size:18px;">⏸</div>
+  </div>
+
+  <!-- Boutons de jeu (sous le bouton Quitter) -->
+  <div id="play-controls" class="hidden">
+    <div id="mute-btn" class="hud-icon-btn">🔊</div>
+    <div id="pause-btn" class="hud-icon-btn">⏸</div>
   </div>
 
   <!-- TOUCH ARROWS -->
@@ -364,6 +377,7 @@
     <button class="big-btn" id="startBtn">▶ JOUER</button>
     <div style="color:#fff8;font-size:14px;margin-top:6px;">ou appuie sur <b>Espace</b></div>
     <div class="best-score">🏆 Meilleur : <span id="best-start">0</span></div>
+    <button class="big-btn" id="dailyBtn" style="display:none;font-size:17px;padding:12px 34px;margin-top:16px;background:linear-gradient(135deg,#f7b733,#fc4a1a);box-shadow:0 6px 0 #b8390f,0 8px 25px rgba(255,150,50,.4);">🎁 Cadeau du jour</button>
     <div style="display:flex;gap:12px;margin-top:14px;flex-wrap:wrap;justify-content:center;">
       <button class="sec-btn" id="shopBtnStart" style="font-size:15px;padding:10px 24px;">🛒 Boutique</button>
       <button class="sec-btn" id="lbBtnStart" style="font-size:15px;padding:10px 24px;">🏆 Classement</button>
@@ -505,6 +519,7 @@ let W, H;
 let state = 'start'; // 'start' | 'playing' | 'paused' | 'gameover'
 let score = 0, coins = 0, level = 1, levelXp = 0, levelXpMax = 10;
 let highScore = 0, totalCoins = 0;
+let dailyStreak = 0, lastClaim = '';
 let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
 let powerups = []; // power-ups actifs { type, endTime }
 let powerupItems = []; // power-ups visuels tombant
@@ -522,6 +537,47 @@ let cannon, bullets, rocks, particles, floatingTexts;
 let frameCount = 0;
 let lastFireFrame = 0;
 
+// ── JUICE : son, tremblement d'écran, combo ──
+let shakeMag = 0;
+let combo = 0, comboTimer = 0, comboMult = 1;
+let bossCount = 0, nextBossScore = 150, bossMaxHits = BOSS_MAX_HITS;
+
+function addShake(m) { shakeMag = Math.min(26, Math.max(shakeMag, m)); }
+
+// Moteur audio synthétique (Web Audio, aucun fichier externe)
+const Sound = (() => {
+  let actx = null;
+  let muted = localStorage.getItem('bbMuted') === '1';
+  function ac() { if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) {} } return actx; }
+  function tone(freq, dur, type = 'square', vol = 0.2, slideTo = null) {
+    if (muted) return; const a = ac(); if (!a) return;
+    const t = a.currentTime, o = a.createOscillator(), g = a.createGain();
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(Math.max(1, slideTo), t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(a.destination); o.start(t); o.stop(t + dur);
+  }
+  function noise(dur, vol = 0.2) {
+    if (muted) return; const a = ac(); if (!a) return;
+    const b = a.createBuffer(1, Math.floor(a.sampleRate * dur), a.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+    const s = a.createBufferSource(); s.buffer = b; const g = a.createGain(); g.gain.value = vol;
+    s.connect(g); g.connect(a.destination); s.start();
+  }
+  return {
+    resume() { const a = ac(); if (a && a.state === 'suspended') a.resume(); },
+    shoot() { tone(720, .05, 'square', .04, 480); },
+    smash() { noise(.16, .16); tone(170, .18, 'sawtooth', .12, 55); },
+    coin()  { tone(880, .07, 'square', .1, 1320); },
+    power() { tone(520, .12, 'square', .13, 1040); setTimeout(() => tone(820, .12, 'square', .11, 1560), 90); },
+    level() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, .14, 'triangle', .13), i * 80)); },
+    boss()  { tone(120, .5, 'sawtooth', .2, 55); },
+    over()  { [440, 330, 220, 160].forEach((f, i) => setTimeout(() => tone(f, .25, 'sawtooth', .15), i * 140)); },
+    toggle() { muted = !muted; localStorage.setItem('bbMuted', muted ? '1' : '0'); if (!muted) this.resume(); return muted; },
+    isMuted() { return muted; }
+  };
+})();
+
 // ── IMAGES PEINTES AVEC CANVAS 2D ───────────
 // (pas d'assets externes — tout est dessiné)
 
@@ -531,12 +587,41 @@ function loadData() {
     totalCoins = d.coins || 0;
     highScore  = d.highScore || 0;
     upgrades   = d.upgrades || { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
+    dailyStreak = d.dailyStreak || 0;
+    lastClaim   = d.lastClaim || '';
   } catch(e) {}
 }
 function saveData() {
   localStorage.setItem('ballBlast2', JSON.stringify({
-    coins: totalCoins, highScore, upgrades
+    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim
   }));
+}
+
+// ── RÉCOMPENSE QUOTIDIENNE ──
+function todayStr() { return new Date().toISOString().slice(0,10); }
+function yesterdayStr() { const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10); }
+function dailyReward(streak) { return 20 + Math.min(streak, 7) * 15; }
+function updateDailyBtn() {
+  const btn = document.getElementById('dailyBtn'); if (!btn) return;
+  if (lastClaim !== todayStr()) {
+    const nextStreak = (lastClaim === yesterdayStr() ? dailyStreak + 1 : 1);
+    btn.style.display = 'inline-block';
+    btn.textContent = `🎁 Cadeau du jour  +${dailyReward(nextStreak)}🪙`;
+  } else {
+    btn.style.display = 'none';
+  }
+}
+function claimDaily() {
+  if (lastClaim === todayStr()) return;
+  dailyStreak = (lastClaim === yesterdayStr() ? dailyStreak + 1 : 1);
+  lastClaim = todayStr();
+  const reward = dailyReward(dailyStreak);
+  totalCoins += reward;
+  saveData();
+  document.getElementById('coin-start').textContent = totalCoins;
+  Sound.resume(); Sound.coin();
+  showNotif(`🎁 +${reward} coins !  Série : ${dailyStreak} jour${dailyStreak>1?'s':''} 🔥`);
+  updateDailyBtn();
 }
 
 // ── RESIZE ───────────────────────────────────
@@ -552,6 +637,9 @@ window.addEventListener('resize', () => { resize(); });
 function initGame() {
   score = 0; coins = 0; level = 1; levelXp = 0; levelXpMax = 10;
   frameCount = 0; lastFireFrame = 0;
+  combo = 0; comboTimer = 0; comboMult = 1;
+  bossCount = 0; nextBossScore = 150; bossMaxHits = BOSS_MAX_HITS;
+  shakeMag = 0;
 
   cannon = {
     x: W/2, y: H - 110,
@@ -585,11 +673,13 @@ function triggerBossPhase() {
   rocks = [];
   bullets = [];
   bossHits = 0;
-  phaseAnnounceText = '💀 PHASE FINALE !';
-  phaseAnnounce = 240;
+  bossMaxHits = BOSS_MAX_HITS + bossCount * 20;  // + coriace à chaque vague
+  phaseAnnounceText = bossCount === 0 ? '💀 BOSS !' : `💀 BOSS ${bossCount + 1} !`;
+  phaseAnnounce = 220;
 
   // Crée la petite pierre boss au centre
   bossRock = makeBossRock(BOSS_START_R);
+  Sound.boss(); addShake(10);
 }
 
 function makeBossRock(r) {
@@ -684,6 +774,7 @@ function activatePowerup(type) {
   powerups.push({ type, endTime: Date.now()+def.duration });
   showNotif(def.icon+' '+def.label);
   spawnFloatText(cannon.x, cannon.y-50, def.icon+' '+def.label, def.col);
+  Sound.power(); addShake(3);
 }
 
 function hasPowerup(type) {
@@ -700,6 +791,7 @@ function fireBullets() {
     bullets.push({ x: cannon.x + ox, y: cannon.y - 30, vy: -14, vx: ox * 0.08 });
   }
   cannon.fireFlash = 8;
+  if (frameCount % 2 === 0) Sound.shoot();
 }
 
 // ── PARTICULES ───────────────────────────────
@@ -723,17 +815,12 @@ const GRAVITY = 0.25;
 function update() {
   frameCount++;
   if (phaseAnnounce > 0) phaseAnnounce--;
+  if (comboTimer > 0) { comboTimer--; if (comboTimer === 0) { combo = 0; comboMult = 1; } }
 
-  // ─ Vérification des seuils de score ─
-  if (gamePhase === 'normal' && score >= 200) {
+  // ─ Boss récurrent : se déclenche à chaque palier, de plus en plus coriace ─
+  if (gamePhase === 'normal' && score >= nextBossScore) {
     triggerBossPhase();
     return;
-  }
-  if (gamePhase === 'normal' && score >= 100) {
-    gamePhase = 'hard';
-    phaseAnnounceText = '⚡ PHASE DIFFICILE !';
-    phaseAnnounce = 180;
-    rocks.forEach(r => { r.vx *= 1.5; });
   }
 
   // ─ Canon ─ (position directe — collé au doigt)
@@ -805,11 +892,14 @@ function update() {
         boom(bul.x, bul.y, rock.col, 6);
 
         if (rock.hp <= 0) {
-          const earned = Math.ceil(rock.maxHp / 5);
+          combo++; comboTimer = 100;
+          comboMult = Math.min(4, 1 + Math.floor((combo - 1) / 3) * 0.5);
+          const earned = Math.max(1, Math.ceil(rock.maxHp / 5 * comboMult));
           coins += earned; totalCoins += earned;
           levelXp++;
-          spawnFloatText(rock.x, rock.y - 20, `+${earned}🪙`, '#ffd700');
+          spawnFloatText(rock.x, rock.y - 20, `+${earned}🪙${comboMult > 1 ? ' x'+comboMult : ''}`, '#ffd700');
           boom(rock.x, rock.y, rock.col, 20);
+          Sound.smash(); Sound.coin(); addShake(6);
           rocks.splice(ri, 1);
 
           // Chance de drop power-up (30%)
@@ -821,6 +911,7 @@ function update() {
             levelXp = 0;
             levelXpMax = Math.ceil(levelXpMax * 1.4);
             spawnFloatText(W/2, H/2 - 60, `LEVEL ${level}!`, '#4ade80');
+            Sound.level(); addShake(4);
             spawnRock();
           }
 
@@ -911,22 +1002,26 @@ function update() {
         bossRock.hitFlash = 8;
         score++;
         boom(bul.x, bul.y, bossRock.col, 4);
+        if (bossHits % 4 === 0) addShake(3);
 
         // Grandit à chaque touche
-        const growPct = bossHits / BOSS_MAX_HITS;
+        const growPct = bossHits / bossMaxHits;
         bossRock.r = BOSS_START_R + (BOSS_MAX_R - BOSS_START_R) * growPct;
         // Régénère les vertices proportionnellement
         rebuildBossVerts();
 
-        if (bossHits >= BOSS_MAX_HITS) {
-          // Boss explosé → retour phase normale
+        if (bossHits >= bossMaxHits) {
+          // Boss explosé → retour phase normale, prochaine vague plus loin
           boom(bossRock.x, bossRock.y, bossRock.col, 50);
           boom(bossRock.x-20, bossRock.y-20, '#fff', 20);
           boom(bossRock.x+20, bossRock.y+20, '#ffd700', 20);
+          Sound.boss(); Sound.level(); addShake(22);
           bossRock = null;
           gamePhase = 'normal';
           bossHits = 0;
-          const earned = 50;
+          bossCount++;
+          nextBossScore = score + 150 + bossCount * 120;
+          const earned = 50 + bossCount * 40;
           coins += earned; totalCoins += earned;
           spawnFloatText(W/2, H/2, `+${earned}🪙 BOSS DÉTRUIT !`, '#ffd700');
           phaseAnnounceText = '💥 BOSS DÉTRUIT !';
@@ -967,6 +1062,17 @@ function drawBackground() {
   // Ciel
   ctx.fillStyle = bgGrad;
   ctx.fillRect(0,0,W,H);
+
+  // Soleil avec halo doux
+  const sunX = W*0.8, sunY = H*0.14, sunR = 42;
+  const sg = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, sunR*3.6);
+  sg.addColorStop(0, 'rgba(255,248,205,0.95)');
+  sg.addColorStop(0.22, 'rgba(255,238,150,0.45)');
+  sg.addColorStop(1, 'rgba(255,238,150,0)');
+  ctx.fillStyle = sg;
+  ctx.beginPath(); ctx.arc(sunX, sunY, sunR*3.6, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff7cc';
+  ctx.beginPath(); ctx.arc(sunX, sunY, sunR, 0, Math.PI*2); ctx.fill();
 
   // Nuages
   ctx.fillStyle = 'rgba(255,255,255,0.85)';
@@ -1424,7 +1530,7 @@ function drawBossRock() {
   // Barre de progression boss
   ctx.shadowBlur = 0;
   const barW = Math.max(rock.r*2, 60);
-  const pct = bossHits / BOSS_MAX_HITS;
+  const pct = bossHits / bossMaxHits;
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
   ctx.fillRect(-barW/2, rock.r+6, barW, 8);
   ctx.fillStyle = `hsl(${120 - pct*120}, 90%, 50%)`;
@@ -1439,9 +1545,9 @@ function drawBossRock() {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = '#000';
-  ctx.fillText(`${bossHits}/${BOSS_MAX_HITS}`, 1.5, 1.5);
+  ctx.fillText(`${bossHits}/${bossMaxHits}`, 1.5, 1.5);
   ctx.fillStyle = '#fff';
-  ctx.fillText(`${bossHits}/${BOSS_MAX_HITS}`, 0, 0);
+  ctx.fillText(`${bossHits}/${bossMaxHits}`, 0, 0);
 
   ctx.restore();
 }
@@ -1473,20 +1579,48 @@ function drawPhaseAnnounce() {
   ctx.restore();
 }
 
+function drawCombo() {
+  if (combo < 2) return;
+  const cx = W/2, cy = 64, t = comboTimer / 100;
+  const hue = 40 - Math.min(combo, 30);   // vire vers le rouge quand ça monte
+  const scale = comboTimer > 92 ? 1 + (comboTimer - 92) / 8 * 0.35 : 1;  // pop d'entrée
+  ctx.save();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `900 ${Math.round(24 * scale)}px Nunito, sans-serif`;
+  const txt = `COMBO ${combo}${comboMult > 1 ? '  ×' + comboMult : ''}`;
+  ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+  ctx.strokeText(txt, cx, cy);
+  ctx.fillStyle = `hsl(${hue},100%,58%)`;
+  ctx.fillText(txt, cx, cy);
+  const bw = 130;
+  ctx.fillStyle = 'rgba(0,0,0,.4)'; ctx.fillRect(cx - bw/2, cy + 16, bw, 5);
+  ctx.fillStyle = `hsl(${hue},100%,58%)`; ctx.fillRect(cx - bw/2, cy + 16, bw * t, 5);
+  ctx.restore();
+}
+
 function draw() {
   ctx.clearRect(0,0,W,H);
   drawBackground();
 
   if (state === 'playing' || state === 'paused') {
+    // Tremblement d'écran appliqué aux entités (le décor reste stable)
+    ctx.save();
+    if (shakeMag > 0.3) {
+      ctx.translate((Math.random()-.5)*shakeMag, (Math.random()-.5)*shakeMag);
+      if (state === 'playing') shakeMag *= 0.86;
+    }
     drawBullets();
     rocks.forEach(drawRock);
     if (gamePhase === 'boss' && bossRock) drawBossRock();
     drawCannon();
     drawPowerupItems();
-    drawActivePowerups();
     drawParticles();
     drawFloatingTexts();
+    ctx.restore();
+
+    drawActivePowerups();
     drawScore();
+    drawCombo();
     if (phaseAnnounce > 0) drawPhaseAnnounce();
 
     if (state === 'paused') {
@@ -1516,6 +1650,7 @@ function loop() {
 // ── GAME OVER ─────────────────────────────────
 function triggerGameOver() {
   state = 'gameover';
+  Sound.over(); addShake(16);
   if (score > highScore) highScore = score;
   saveData();
   // Envoie le score Firebase
@@ -1524,6 +1659,7 @@ function triggerGameOver() {
   document.getElementById('go-best').textContent  = highScore;
   document.getElementById('go-coins').textContent = coins;
   document.getElementById('hud').classList.add('hidden');
+  document.getElementById('play-controls').classList.add('hidden');
   document.getElementById('touch-controls').classList.remove('active');
   document.getElementById('gameover-screen').classList.remove('hidden');
 }
@@ -1592,10 +1728,12 @@ function showNotif(msg) {
 // ── CONTRÔLES ─────────────────────────────────
 function startGame() {
   state = 'playing';
+  Sound.resume();
   document.getElementById('start-screen').classList.add('hidden');
   document.getElementById('gameover-screen').classList.add('hidden');
   document.getElementById('pause-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
+  document.getElementById('play-controls').classList.remove('hidden');
   if (touchArrowsEnabled) document.getElementById('touch-controls').classList.add('active');
   initGame();
 }
@@ -1684,6 +1822,14 @@ document.getElementById('pause-btn').addEventListener('click', () => {
   else if (state==='paused') resumeGame();
 });
 
+// Mute btn
+const muteBtn = document.getElementById('mute-btn');
+muteBtn.textContent = Sound.isMuted() ? '🔇' : '🔊';
+muteBtn.addEventListener('click', () => {
+  const muted = Sound.toggle();
+  muteBtn.textContent = muted ? '🔇' : '🔊';
+});
+
 // Pause menu buttons
 document.getElementById('resumeBtn').addEventListener('click', resumeGame);
 document.getElementById('pauseShopBtn').addEventListener('click', () => { resumeGame(); showShop(); pauseGame(); });
@@ -1691,8 +1837,12 @@ document.getElementById('pauseQuitBtn').addEventListener('click', () => {
   state = 'start';
   document.getElementById('pause-screen').classList.add('hidden');
   document.getElementById('hud').classList.add('hidden');
+  document.getElementById('play-controls').classList.add('hidden');
   document.getElementById('touch-controls').classList.remove('active');
   document.getElementById('start-screen').classList.remove('hidden');
+  document.getElementById('coin-start').textContent = totalCoins;
+  document.getElementById('best-start').textContent = highScore;
+  updateDailyBtn();
 });
 document.getElementById('pauseLbBtn').addEventListener('click', () => {
   document.getElementById('pause-screen').classList.add('hidden');
@@ -1749,6 +1899,8 @@ if (localStorage.getItem('touchArrows') === '1') {
 
 document.getElementById('coin-start').textContent = totalCoins;
 document.getElementById('best-start').textContent  = highScore;
+document.getElementById('dailyBtn').addEventListener('click', claimDaily);
+updateDailyBtn();
 
 // Override loop to include arrow movement
 function loop() {
