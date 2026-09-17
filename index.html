@@ -976,22 +976,25 @@ const ROCK_COLORS = [
 ];
 
 function spawnRock(initial=false) {
+  const spd = Math.min(2.6, 1 + (level - 1) * 0.05);   // chute/rebond de + en + rapides
   const size  = 40 + Math.random() * 50;
   const r     = size / 2;
   const baseHp = Math.ceil((level * 8 + Math.random() * level * 6) * Math.max(1, level * 0.3));
   const [col, dark] = ROCK_COLORS[Math.floor(Math.random() * ROCK_COLORS.length)];
   const nv = 7 + Math.floor(Math.random() * 4);
+  const vxRange = Math.min(9, 3 + level * 0.5);         // + de déplacement latéral aux hauts niveaux
 
   rocks.push({
     x: r + Math.random() * (W - r*2),
     y: initial ? -r - Math.random()*150 : -r - 20,
     r, verts: buildVerts(r, nv), cracks: buildCracks(r),
     hp: baseHp, maxHp: baseHp,
-    vx: (Math.random()-0.5) * (gamePhase==='hard' ? 5 : 3),
+    vx: (Math.random()-0.5) * vxRange,
     vy: initial ? 1.5 : 2,
     col, dark,
     angle: 0, av: (Math.random()-0.5)*0.03,
-    hitFlash: 0, scaleShake: 1
+    hitFlash: 0, scaleShake: 1,
+    spd
   });
 }
 
@@ -1089,7 +1092,7 @@ function update() {
   for (let ri=rocks.length-1; ri>=0; ri--) {
     const rock = rocks[ri];
     if (!frozen) {
-      rock.vy += GRAVITY;
+      rock.vy += GRAVITY * (rock.spd || 1);
       rock.x  += rock.vx;
       rock.y  += rock.vy;
       rock.angle += rock.av;
@@ -1171,10 +1174,12 @@ function update() {
             }
           }
 
-          // Respawn uniquement en phase normale (pas pendant un boss)
+          // Respawn uniquement en phase normale — le nombre max de rochers
+          // monte avec le niveau (jusqu'à 9), rythme de + en + soutenu
           if (gamePhase === 'normal') {
             spawnRock();
-            if (rocks.length < Math.min(2 + Math.floor(level/3), 5)) spawnRock();
+            const cap = Math.min(2 + Math.floor(level / 2), 9);
+            if (rocks.length < cap) spawnRock();
           } else if ((bossType === 'swarm' || bossType === 'splitter') && rocks.length === 0) {
             // Essaim / Titan nettoyé → boss vaincu
             boom(rock.x, rock.y, '#fff', 24);
