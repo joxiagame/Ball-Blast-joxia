@@ -240,6 +240,14 @@
   .skin-btn:active { transform:translateY(2px); box-shadow:0 0 0 #b57900; }
   .skin-btn.skin-buy { min-width:60px; }
   .skin-state { color:#4ade80; font-weight:800; font-size:12px; padding:6px 0; }
+
+  /* ── MODES ── */
+  #mode-shop { width:100%; max-width:420px; }
+  .mode-card { display:flex; align-items:center; gap:12px; background:linear-gradient(180deg,rgba(255,120,60,.14),rgba(255,120,60,.05)); border:1px solid rgba(255,140,60,.3); border-radius:16px; padding:14px 16px; }
+  .mode-card.mode-owned { border-color:rgba(74,222,128,.4); background:linear-gradient(180deg,rgba(74,222,128,.1),rgba(74,222,128,.03)); }
+  .mode-info { flex:1; text-align:left; }
+  .mode-name { color:#fff; font-weight:800; font-size:15px; }
+  .mode-desc { color:#b9c2cf; font-size:12px; margin-top:3px; }
   .close-btn {
     position:absolute;
     top:14px; right:14px;
@@ -442,6 +450,10 @@
       <div class="toggle-sw" id="touchToggle"><div class="toggle-knob"></div></div>
       <span>Flèches tactiles</span>
     </div>
+    <div class="toggle-row" id="frenzy-row" style="display:none;">
+      <div class="toggle-sw" id="frenzyToggle"><div class="toggle-knob"></div></div>
+      <span>🔥 Mode Frénésie <span style="color:#ffd54a;">(coins ×2)</span></span>
+    </div>
   </div>
 
   <!-- GAME OVER -->
@@ -468,6 +480,8 @@
     <div class="upgrade-grid" id="upgrade-grid"></div>
     <h3 class="shop-subtitle">🎨 SKINS DE CANON</h3>
     <div class="skin-grid" id="skin-grid"></div>
+    <h3 class="shop-subtitle">🎮 MODES</h3>
+    <div id="mode-shop"></div>
     <button class="big-btn" style="margin-top:24px;" id="closeShop2">Fermer</button>
   </div>
 
@@ -589,6 +603,7 @@ let score = 0, coins = 0, level = 1, levelXp = 0, levelXpMax = 10;
 let highScore = 0, totalCoins = 0;
 let dailyStreak = 0, lastClaim = '';
 let ownedSkins = ['default'], equippedSkin = 'default';
+let frenzyUnlocked = false, frenzyMode = false, coinMul = 1;
 let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
 
 // Skins de canon (palette métal A/B/C + moyeu de roue)
@@ -668,16 +683,19 @@ function loadData() {
     totalCoins = d.coins || 0;
     highScore  = d.highScore || 0;
     upgrades   = d.upgrades || { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
+    upgrades.pierce = upgrades.pierce || 0;
+    upgrades.drone  = upgrades.drone  || 0;
     dailyStreak = d.dailyStreak || 0;
     lastClaim   = d.lastClaim || '';
     ownedSkins  = d.ownedSkins || ['default'];
     equippedSkin = d.equippedSkin || 'default';
     if (!SKINS[equippedSkin]) equippedSkin = 'default';
+    frenzyUnlocked = !!d.frenzyUnlocked;
   } catch(e) {}
 }
 function saveData() {
   localStorage.setItem('ballBlast2', JSON.stringify({
-    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin
+    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin, frenzyUnlocked
   }));
 }
 
@@ -818,7 +836,8 @@ if (window.ResizeObserver) {
 
 // ── INIT PARTIE ──────────────────────────────
 function initGame() {
-  score = 0; coins = 0; level = 1; levelXp = 0; levelXpMax = 10;
+  score = 0; coins = 0; level = frenzyMode ? 4 : 1; levelXp = 0; levelXpMax = frenzyMode ? 8 : 10;
+  coinMul = frenzyMode ? 2 : 1;
   frameCount = 0; lastFireFrame = 0;
   combo = 0; comboTimer = 0; comboMult = 1;
   bossCount = 0; nextBossScore = 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
@@ -912,7 +931,7 @@ function endBossPhase() {
   bossCount++;
   missionProgress('boss', 1);
   nextBossScore = score + 150 + bossCount * 120;
-  const earned = 50 + bossCount * 40;
+  const earned = Math.round((50 + bossCount * 40) * coinMul);
   coins += earned; totalCoins += earned;
   spawnFloatText(W/2, H/2, `+${earned}🪙 BOSS VAINCU !`, '#ffd700');
   phaseAnnounceText = '💥 BOSS VAINCU !';
@@ -1032,9 +1051,16 @@ function fireBullets() {
   let count = upgrades.ballCount;
   if (hasPowerup('doubleBullet')) count = count * 2;
   const spread = 0.5 * (count - 1);
+  const pierce = upgrades.pierce || 0;
   for (let i = 0; i < count; i++) {
     const ox = count > 1 ? (i/(count-1) - 0.5) * spread * 20 : 0;
-    bullets.push({ x: cannon.x + ox, y: cannon.y - 30, vy: -14, vx: ox * 0.08 });
+    bullets.push({ x: cannon.x + ox, y: cannon.y - 30, vy: -14, vx: ox * 0.08, pierce });
+  }
+  // Drones latéraux : tirent tout droit
+  const drones = upgrades.drone || 0;
+  for (let d = 0; d < drones; d++) {
+    const side = (d === 0 ? -1 : 1);
+    bullets.push({ x: cannon.x + side * 46, y: cannon.y - 6, vy: -13, vx: 0, pierce });
   }
   cannon.fireFlash = 8;
   if (frameCount % 2 === 0) Sound.shoot();
@@ -1130,7 +1156,8 @@ function update() {
     for (let bi=bullets.length-1; bi>=0; bi--) {
       const bul = bullets[bi];
       if (Math.hypot(rock.x-bul.x, rock.y-bul.y) < rock.r + 5) {
-        bullets.splice(bi, 1);
+        // Perçage : la balle traverse au lieu d'être consommée
+        if (bul.pierce > 0) bul.pierce--; else bullets.splice(bi, 1);
         const dmg = upgrades.ballPower;
         rock.hp -= dmg;
         rock.hitFlash = 8;
@@ -1140,7 +1167,7 @@ function update() {
         if (rock.hp <= 0) {
           combo++; comboTimer = 100;
           comboMult = Math.min(4, 1 + Math.floor((combo - 1) / 3) * 0.5);
-          const earned = Math.max(1, Math.ceil(rock.maxHp / 5 * comboMult));
+          const earned = Math.max(1, Math.ceil(rock.maxHp / 5 * comboMult * coinMul));
           coins += earned; totalCoins += earned;
           missionProgress('destroy', 1);
           missionProgress('combo', combo);
@@ -1532,6 +1559,27 @@ function drawCannon() {
   // ── Roues ──
   drawWheel(-18, 20);
   drawWheel(18, 20);
+
+  // ── Drones latéraux (mécanique achetée) ──
+  const drones = upgrades.drone || 0;
+  for (let di = 0; di < drones; di++) {
+    const dxo = (di === 0 ? -46 : 46);
+    ctx.save();
+    ctx.translate(dxo, -4);
+    ctx.fillStyle = 'rgba(0,0,0,0.18)';
+    ctx.beginPath(); ctx.ellipse(0, 22, 12, 4, 0, 0, Math.PI*2); ctx.fill();
+    // canon
+    ctx.fillStyle = sk.metalC;
+    ctx.fillRect(-2.5, -18, 5, 14);
+    // corps
+    ctx.fillStyle = sk.metalB;
+    ctx.beginPath(); ctx.arc(0, 0, 9, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = sk.metalC; ctx.lineWidth = 2; ctx.stroke();
+    // témoin lumineux
+    ctx.fillStyle = sk.hub2;
+    ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
 
   ctx.restore();
 }
@@ -1966,10 +2014,13 @@ const UPGRADES_DEF = [
   { key:'ballCount',  icon:'🎯', name:'Multitir',  desc:'Balles simultanées', maxLvl:5,  baseCost:35 },
   { key:'ballPower',  icon:'💥', name:'Puissance', desc:'Dégâts par balle',   maxLvl:10, baseCost:20 },
   { key:'cannonSpeed',icon:'💨', name:'Vitesse',   desc:'Canon plus rapide',  maxLvl:8,  baseCost:18 },
+  { key:'pierce',     icon:'🏹', name:'Perçage',   desc:'Traverse les rochers', maxLvl:3, baseCost:70,  min:0 },
+  { key:'drone',      icon:'🤖', name:'Drone',     desc:'Tourelle auto',        maxLvl:2, baseCost:150, min:0 },
 ];
 
 function upgradeCost(def) {
-  return Math.ceil(def.baseCost * Math.pow(1.35, upgrades[def.key]-1));
+  const min = (def.min !== undefined) ? def.min : 1;
+  return Math.ceil(def.baseCost * Math.pow(1.4, upgrades[def.key] - min));
 }
 
 function renderShop() {
@@ -2004,6 +2055,30 @@ function renderShop() {
     grid.appendChild(card);
   });
   renderSkins();
+  renderModes();
+}
+
+function renderModes() {
+  const el = document.getElementById('mode-shop'); if (!el) return;
+  const price = 800;
+  if (frenzyUnlocked) {
+    el.innerHTML = `<div class="mode-card mode-owned"><div class="mode-info"><div class="mode-name">🔥 Mode Frénésie</div><div class="mode-desc">Départ niveau 4 · accélération · coins ×2</div></div><div class="skin-state">✅ Débloqué</div></div>`;
+  } else {
+    el.innerHTML = `<div class="mode-card"><div class="mode-info"><div class="mode-name">🔥 Mode Frénésie</div><div class="mode-desc">Départ niveau 4 · accélération · coins ×2</div></div><button class="skin-btn skin-buy" id="buyFrenzy">🪙 ${price}</button></div>`;
+    const btn = document.getElementById('buyFrenzy');
+    if (btn) btn.addEventListener('click', () => {
+      if (totalCoins < price) { showNotif('Pas assez de coins 😅'); return; }
+      totalCoins -= price; frenzyUnlocked = true; saveData();
+      Sound.resume(); Sound.coin(); showNotif('🔥 Mode Frénésie débloqué !');
+      renderShop(); updateFrenzyToggle();
+    });
+  }
+}
+
+function updateFrenzyToggle() {
+  const row = document.getElementById('frenzy-row'); if (!row) return;
+  row.style.display = frenzyUnlocked ? 'flex' : 'none';
+  document.getElementById('frenzyToggle').classList.toggle('on', frenzyMode);
 }
 
 function renderSkins() {
@@ -2235,6 +2310,14 @@ document.getElementById('coin-start').textContent = totalCoins;
 document.getElementById('best-start').textContent  = highScore;
 document.getElementById('dailyBtn').addEventListener('click', claimDaily);
 updateDailyBtn();
+
+// Mode Frénésie (interrupteur sur l'accueil, visible une fois débloqué)
+updateFrenzyToggle();
+document.getElementById('frenzyToggle').addEventListener('click', () => {
+  if (!frenzyUnlocked) return;
+  frenzyMode = !frenzyMode;
+  updateFrenzyToggle();
+});
 
 // Missions
 loadMissions();
