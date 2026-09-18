@@ -135,6 +135,9 @@
   @keyframes hellPulse { 0%,100%{ filter:brightness(1);} 50%{ filter:brightness(1.18);} }
   .hell-lock { border-color:rgba(255,90,40,.5) !important; color:#ff9a6a !important; }
   .hell-lock:hover { background:rgba(255,90,40,.15) !important; }
+  .tundra-btn { background:linear-gradient(180deg,#8fe3ff 0%,#3aa0e0 55%,#1f6fae 100%) !important; color:#06263c !important; box-shadow:0 6px 0 #14507e, 0 10px 30px rgba(80,180,255,.55), inset 0 2px 0 rgba(255,255,255,.6) !important; animation:hellPulse 1.6s ease-in-out infinite; }
+  .tundra-lock { border-color:rgba(120,200,255,.5) !important; color:#a9dcff !important; }
+  .tundra-lock:hover { background:rgba(120,200,255,.15) !important; }
   .big-btn:active { transform:translateY(4px); box-shadow:0 2px 0 #c0392b, 0 4px 12px rgba(255,90,40,.4), inset 0 2px 0 rgba(255,255,255,.4); }
   .best-score {
     margin-top:20px;
@@ -235,6 +238,7 @@
   /* ── SKINS DE CANON ── */
   .shop-subtitle { color:#4ecdc4; font-size:16px; font-weight:800; letter-spacing:1px; margin:22px 0 12px; }
   .shop-subtitle-hell { color:#ff6a3a; text-shadow:0 0 14px rgba(255,80,20,.5); }
+  .shop-subtitle-tundra { color:#7fd0ff; text-shadow:0 0 14px rgba(120,200,255,.5); }
   .skin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:420px; }
   .skin-card { background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.14); border-radius:16px; padding:12px 8px; text-align:center; transition:border-color .15s; }
   .skin-card.skin-equipped { border-color:#4ade80; box-shadow:0 0 16px rgba(74,222,128,.25); }
@@ -460,6 +464,7 @@
       <span>🔥 Mode Frénésie <span style="color:#ffd54a;">(coins ×2)</span></span>
     </div>
     <div id="hell-block" style="margin-top:16px;"></div>
+    <div id="tundra-block" style="margin-top:12px;"></div>
   </div>
 
   <!-- GAME OVER -->
@@ -487,6 +492,10 @@
     <div id="hell-upgrade-section" style="display:none;width:100%;max-width:420px;">
       <h3 class="shop-subtitle shop-subtitle-hell">🔥 AMÉLIORATIONS ENFER</h3>
       <div class="upgrade-grid" id="hell-upgrade-grid"></div>
+    </div>
+    <div id="tundra-upgrade-section" style="display:none;width:100%;max-width:420px;">
+      <h3 class="shop-subtitle shop-subtitle-tundra">❄️ AMÉLIORATIONS TUNDRA</h3>
+      <div class="upgrade-grid" id="tundra-upgrade-grid"></div>
     </div>
     <h3 class="shop-subtitle">🎨 SKINS DE CANON</h3>
     <div class="skin-grid" id="skin-grid"></div>
@@ -615,7 +624,8 @@ let dailyStreak = 0, lastClaim = '';
 let ownedSkins = ['default'], equippedSkin = 'default';
 let frenzyUnlocked = false, frenzyMode = false, coinMul = 1;
 let hellUnlocked = false, hellMode = false, env = 'day';
-const HELL_PRICE = 4000;
+let tundraUnlocked = false, tundraMode = false;
+const HELL_PRICE = 4000, TUNDRA_PRICE = 6000;
 let upgrades = { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
 
 // Skins de canon (palette métal A/B/C + moyeu de roue)
@@ -709,11 +719,15 @@ function loadData() {
     if (!SKINS[equippedSkin]) equippedSkin = 'default';
     frenzyUnlocked = !!d.frenzyUnlocked;
     hellUnlocked = !!d.hellUnlocked;
+    tundraUnlocked = !!d.tundraUnlocked;
+    upgrades.frostShot = upgrades.frostShot || 0;
+    upgrades.iceBurst = upgrades.iceBurst || 0;
+    upgrades.grip = upgrades.grip || 0;
   } catch(e) {}
 }
 function saveData() {
   localStorage.setItem('ballBlast2', JSON.stringify({
-    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin, frenzyUnlocked, hellUnlocked
+    coins: totalCoins, highScore, upgrades, dailyStreak, lastClaim, ownedSkins, equippedSkin, frenzyUnlocked, hellUnlocked, tundraUnlocked
   }));
 }
 
@@ -854,19 +868,20 @@ if (window.ResizeObserver) {
 
 // ── INIT PARTIE ──────────────────────────────
 function initGame() {
-  env = hellMode ? 'hell' : 'day';
+  env = hellMode ? 'hell' : (tundraMode ? 'tundra' : 'day');
+  const special = hellMode || tundraMode;
   score = 0; coins = 0;
-  level = hellMode ? 8 : (frenzyMode ? 4 : 1);
-  levelXp = 0; levelXpMax = (hellMode || frenzyMode) ? 8 : 10;
-  coinMul = hellMode ? 3 : (frenzyMode ? 2 : 1);
+  level = special ? 8 : (frenzyMode ? 4 : 1);
+  levelXp = 0; levelXpMax = (special || frenzyMode) ? 8 : 10;
+  coinMul = special ? 3 : (frenzyMode ? 2 : 1);
   frameCount = 0; lastFireFrame = 0;
   combo = 0; comboTimer = 0; comboMult = 1;
-  bossCount = 0; nextBossScore = hellMode ? 120 : 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
+  bossCount = 0; nextBossScore = special ? 120 : 150; bossMaxHits = BOSS_MAX_HITS; bossType = 'grower';
   shakeMag = 0;
   buildDecor();   // régénère le décor pour l'environnement courant
 
   cannon = {
-    x: W/2, y: H - 110,
+    x: W/2, y: H - 110, tx: W/2, vx: 0,
     w: 64, h: 70,
     fireFlash: 0
   };
@@ -888,6 +903,7 @@ function initGame() {
   phaseAnnounceText = '';
 
   if (hellMode) { phaseAnnounceText = '🔥 ENFER 🔥'; phaseAnnounce = 200; }
+  else if (tundraMode) { phaseAnnounceText = '❄️ TUNDRA ❄️'; phaseAnnounce = 200; }
 
   // Lance 1 ou 2 rochers
   spawnRock(true);
@@ -1021,19 +1037,23 @@ const ROCK_COLORS = [
   ['#16a085','#0e6655'], ['#c0392b','#7b241c'],
   ['#7d3c98','#512e5f']
 ];
-// Palette de lave pour le Mode Enfer
+// Palette de lave (Enfer) et de glace (Tundra)
 const LAVA_COLORS = [
   ['#ff3b00','#7a1500'], ['#ff6a00','#8a2b00'],
   ['#ff2d55','#7a0a20'], ['#ffae00','#8a4a00'], ['#d81e00','#5a0a00']
 ];
+const ICE_COLORS = [
+  ['#8fd8ff','#2b6f9e'], ['#c8f0ff','#4a8fb5'],
+  ['#a9e4ff','#357aa0'], ['#7fd0f5','#245f85'], ['#d6f4ff','#5a9ec4']
+];
 
 function spawnRock(initial=false) {
-  const hot = env === 'hell';
-  const spd = Math.min(hot ? 3.4 : 2.6, (hot ? 1.35 : 1) + (level - 1) * (hot ? 0.06 : 0.05));
+  const special = env === 'hell' || env === 'tundra';
+  const spd = Math.min(special ? 3.4 : 2.6, (special ? 1.35 : 1) + (level - 1) * (special ? 0.06 : 0.05));
   const size  = 40 + Math.random() * 50;
   const r     = size / 2;
   const baseHp = Math.ceil((level * 8 + Math.random() * level * 6) * Math.max(1, level * 0.3));
-  const palette = hot ? LAVA_COLORS : ROCK_COLORS;
+  const palette = env === 'hell' ? LAVA_COLORS : (env === 'tundra' ? ICE_COLORS : ROCK_COLORS);
   const [col, dark] = palette[Math.floor(Math.random() * palette.length)];
   const nv = 7 + Math.floor(Math.random() * 4);
   const vxRange = Math.min(9, 3 + level * 0.5);         // + de déplacement latéral aux hauts niveaux
@@ -1140,8 +1160,17 @@ function update() {
     return;
   }
 
-  // ─ Canon ─ (position directe — collé au doigt)
-  cannon.x = Math.max(36, Math.min(W-36, cannon.x));
+  // ─ Canon ─ position : collé au doigt (normal) ou glissant sur la glace (Tundra)
+  const tx = Math.max(36, Math.min(W-36, cannon.tx !== undefined ? cannon.tx : cannon.x));
+  if (env === 'tundra') {
+    const grip = 0.045 + (upgrades.grip || 0) * 0.03;   // + de "Patins" = moins glissant
+    cannon.vx = (cannon.vx || 0) + (tx - cannon.x) * grip;
+    cannon.vx *= 0.9;
+    cannon.x += cannon.vx;
+    cannon.x = Math.max(36, Math.min(W-36, cannon.x));
+  } else {
+    cannon.x = tx; cannon.vx = 0;
+  }
   if (cannon.fireFlash > 0) cannon.fireFlash--;
 
   // ─ Tir automatique ─
@@ -1163,10 +1192,11 @@ function update() {
   for (let ri=rocks.length-1; ri>=0; ri--) {
     const rock = rocks[ri];
     if (!frozen) {
+      const sl = rock.slow > 0 ? (rock.slow--, 0.35) : 1;   // ralenti par le givre
       rock.vy += GRAVITY * (rock.spd || 1);
-      rock.x  += rock.vx;
-      rock.y  += rock.vy;
-      rock.angle += rock.av;
+      rock.x  += rock.vx * sl;
+      rock.y  += rock.vy * sl;
+      rock.angle += rock.av * sl;
     }
     if (rock.hitFlash > 0) rock.hitFlash--;
     rock.scaleShake = 1 + Math.sin(frameCount*0.5)*0.01*(rock.hitFlash/8);
@@ -1205,6 +1235,7 @@ function update() {
         const dmg = upgrades.ballPower * (1 + 0.4 * (upgrades.hellBurn || 0));
         rock.hp -= dmg;
         rock.hitFlash = 8;
+        if ((upgrades.frostShot || 0) > 0) rock.slow = Math.max(rock.slow || 0, 40 + upgrades.frostShot * 25);
         score++;
         boom(bul.x, bul.y, rock.col, 6);
 
@@ -1225,6 +1256,11 @@ function update() {
           // Onde de choc : explosion qui abîme les rochers proches
           if ((upgrades.hellExplosion || 0) > 0) {
             explosions.push({ x: rock.x, y: rock.y, dmg: 14 * upgrades.hellExplosion, radius: 55 + 22 * upgrades.hellExplosion });
+          }
+          // Éclat de glace : fige brièvement les rochers proches
+          if ((upgrades.iceBurst || 0) > 0) {
+            const rad = 60 + 25 * upgrades.iceBurst;
+            rocks.forEach(rk => { if (Math.hypot(rk.x - rock.x, rk.y - rock.y) < rad) rk.slow = 100 + 40 * upgrades.iceBurst; });
           }
 
           // Chance de drop power-up (30%)
@@ -1302,22 +1338,23 @@ function update() {
   }
 
   // ─ ENFER : pluie de boules de feu à esquiver (indestructibles) ─
-  if (env === 'hell') {
-    const interval = Math.max(24, 78 - level * 3);   // pluie de feu de + en + dense
+  if (env === 'hell' || env === 'tundra') {
+    const interval = Math.max(24, 78 - level * 3);   // pluie de dangers de + en + dense
     if (frameCount % interval === 0) {
       const n = level >= 14 ? 2 : 1;                 // salves doubles à haut niveau
       for (let k = 0; k < n; k++)
-        fireballs.push({ x: 20 + Math.random()*(W-40), y: -20, vy: 6.5 + Math.random()*3 + level*0.12, r: 12 + Math.random()*6, t: Math.random()*6 });
+        fireballs.push({ x: 20 + Math.random()*(W-40), y: -20, vy: 6.5 + Math.random()*3 + level*0.12, r: 12 + Math.random()*6, t: Math.random()*6, kind: env });
     }
     for (let i=fireballs.length-1; i>=0; i--) {
       const f = fireballs[i];
       f.y += f.vy; f.t += 0.3;
+      const cold = f.kind === 'tundra';
       if (Math.hypot(f.x-cannon.x, f.y-(cannon.y-4)) < f.r + 24) {
         if (useShield()) {
           showNotif('⭐ Bouclier brisé !');
-          boom(cannon.x, cannon.y, '#ff6a00', 20);
+          boom(cannon.x, cannon.y, cold ? '#bfeaff' : '#ff6a00', 20);
           fireballs.splice(i,1);
-        } else { boom(cannon.x, cannon.y, '#ff3b00', 30); triggerGameOver(); return; }
+        } else { boom(cannon.x, cannon.y, cold ? '#8fd8ff' : '#ff3b00', 30); triggerGameOver(); return; }
         continue;
       }
       if (f.y > H + 30) fireballs.splice(i,1);
@@ -1413,7 +1450,7 @@ function update() {
 
 // ── DRAW ─────────────────────────────────────
 // Décor animé : ciel + soleil + nuages parallax + collines + poussière
-let skyGrad, groundGrad, hellSky, hellGround, clouds = [], bgDust = [];
+let skyGrad, groundGrad, hellSky, hellGround, tundraSky, tundraGround, clouds = [], bgDust = [];
 
 function buildDecor() {
   skyGrad = ctx.createLinearGradient(0, 0, 0, H*0.82);
@@ -1437,6 +1474,17 @@ function buildDecor() {
   hellGround.addColorStop(0, '#ff7a12');
   hellGround.addColorStop(0.25, '#c22400');
   hellGround.addColorStop(1, '#3a0602');
+
+  // Ciel & sol de la Tundra
+  tundraSky = ctx.createLinearGradient(0, 0, 0, H*0.85);
+  tundraSky.addColorStop(0.00, '#0b1c3a');
+  tundraSky.addColorStop(0.45, '#22436f');
+  tundraSky.addColorStop(0.80, '#5b8fb9');
+  tundraSky.addColorStop(1.00, '#b9e3f0');
+  tundraGround = ctx.createLinearGradient(0, H*0.80, 0, H);
+  tundraGround.addColorStop(0, '#eaf7ff');
+  tundraGround.addColorStop(0.30, '#bfe2f2');
+  tundraGround.addColorStop(1, '#7fb4d6');
 
   clouds = [];
   const cloudN = Math.max(4, Math.round(W/220));
@@ -1477,6 +1525,7 @@ function drawBackground() {
   const t = frameCount;
 
   if (env === 'hell') { drawHellBackground(t); return; }
+  if (env === 'tundra') { drawTundraBackground(t); return; }
 
   // Ciel
   ctx.fillStyle = skyGrad;
@@ -1604,6 +1653,68 @@ function jagged(baseY, amp, freq) {
     ctx.lineTo(x, y);
   }
   ctx.lineTo(W, H); ctx.closePath(); ctx.fill();
+}
+
+// Fond animé du Mode Tundra
+function drawTundraBackground(t) {
+  ctx.fillStyle = tundraSky || '#22436f';
+  ctx.fillRect(0,0,W,H);
+
+  // Aurore boréale ondulante
+  for (let a=0; a<3; a++){
+    ctx.save();
+    ctx.globalAlpha = 0.10 + 0.05*Math.sin(t*0.02 + a);
+    const grd = ctx.createLinearGradient(0, H*0.1, 0, H*0.5);
+    grd.addColorStop(0, a===0?'#63ffd0':(a===1?'#7ab8ff':'#c58bff'));
+    grd.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grd;
+    ctx.beginPath(); ctx.moveTo(0, H*0.5);
+    for (let x=0;x<=W;x+=20){ ctx.lineTo(x, H*0.16 + Math.sin(x*0.01 + t*0.02 + a*1.3)*26 + a*22); }
+    ctx.lineTo(W, H*0.5); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+
+  // Lune froide + halo
+  const mx = W*0.80, my = H*0.16, mr = 34;
+  const mg = ctx.createRadialGradient(mx,my,0,mx,my,mr*3);
+  mg.addColorStop(0,'rgba(220,240,255,0.5)'); mg.addColorStop(1,'rgba(220,240,255,0)');
+  ctx.fillStyle = mg; ctx.beginPath(); ctx.arc(mx,my,mr*3,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#eaf4ff'; ctx.beginPath(); ctx.arc(mx,my,mr,0,Math.PI*2); ctx.fill();
+
+  // Montagnes de glace (silhouettes claires)
+  ctx.fillStyle = '#3a5f83'; jagged(H*0.66, 70, 0.011);
+  ctx.fillStyle = '#5b83a8'; jagged(H*0.73, 52, 0.017);
+  // reflets de neige sur les crêtes
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x=0;x<=W;x+=14){ ctx.lineTo(x, H*0.73 - Math.abs(Math.sin(x*0.017)+Math.sin(x*0.017*2.3)*0.5)*52); }
+  ctx.stroke();
+
+  // Sol de neige/glace
+  ctx.fillStyle = tundraGround || '#bfe2f2';
+  ctx.fillRect(0, Math.floor(H*0.80), W, Math.ceil(H*0.24));
+  // craquelures de glace
+  ctx.strokeStyle = 'rgba(120,170,205,0.5)'; ctx.lineWidth = 1.5;
+  for (let i=0;i<4;i++){
+    const yy = H*(0.85 + i*0.035);
+    ctx.beginPath();
+    for (let x=0;x<=W;x+=30){ ctx.lineTo(x, yy + Math.sin(x*0.05 + i*2)*3); }
+    ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.fillRect(0, Math.floor(H*0.80), W, 4);
+
+  // Neige qui tombe (réutilise bgDust en descente)
+  bgDust.forEach(d => {
+    d.y -= d.vy*0.02;                 // vy est négatif -> descend
+    d.x += Math.sin(t*0.02 + d.ph)*0.5;
+    if (d.y > H+5) { d.y = -5; d.x = Math.random()*W; }
+    if (d.y < -6) d.y = -5;
+    ctx.globalAlpha = d.a * (0.6 + 0.4*Math.sin(t*0.04 + d.ph));
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(d.x, d.y, d.r*1.1, 0, Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
 }
 
 function drawCloud(cx, cy, scale, alpha) {
@@ -1977,6 +2088,24 @@ function drawFireballs() {
   fireballs.forEach(f => {
     ctx.save();
     ctx.translate(f.x, f.y);
+    if (f.kind === 'tundra') {
+      // stalactite de glace (pointe vers le bas)
+      ctx.shadowColor = '#9fe4ff'; ctx.shadowBlur = 12;
+      const g = ctx.createLinearGradient(0, -f.r, 0, f.r*1.6);
+      g.addColorStop(0, '#eaffff'); g.addColorStop(0.5, '#9fe0ff'); g.addColorStop(1, '#3f8fc0');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.moveTo(-f.r*0.55, -f.r*0.7);
+      ctx.lineTo(f.r*0.55, -f.r*0.7);
+      ctx.lineTo(0, f.r*1.6);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(-f.r*0.22, -f.r*0.55); ctx.lineTo(f.r*0.04, -f.r*0.55); ctx.lineTo(-f.r*0.06, f.r*1.0);
+      ctx.closePath(); ctx.fill();
+      ctx.restore();
+      return;
+    }
     // trainée
     for (let t=1;t<=5;t++){
       ctx.globalAlpha = 0.12*(6-t);
@@ -2250,6 +2379,13 @@ const HELL_UPGRADES_DEF = [
   { key:'hellRevive',    icon:'😈', name:'Seconde vie',     desc:'Revit 1× / partie',   maxLvl:1, baseCost:1500, min:0 },
 ];
 
+// Améliorations "Tundra" (débloquées avec le Mode Tundra)
+const TUNDRA_UPGRADES_DEF = [
+  { key:'frostShot', icon:'❄️', name:'Balles de givre', desc:'Ralentit les rochers', maxLvl:3, baseCost:450,  min:0 },
+  { key:'iceBurst',  icon:'🧊', name:'Éclat de glace',  desc:'Fige les rochers proches', maxLvl:3, baseCost:650, min:0 },
+  { key:'grip',      icon:'🥾', name:'Patins',          desc:'Canon moins glissant', maxLvl:3, baseCost:500,  min:0 },
+];
+
 function upgradeCost(def) {
   const min = (def.min !== undefined) ? def.min : 1;
   return Math.ceil(def.baseCost * Math.pow(1.55, upgrades[def.key] - min));
@@ -2295,6 +2431,9 @@ function renderShop() {
   const hellSec = document.getElementById('hell-upgrade-section');
   if (hellSec) hellSec.style.display = hellUnlocked ? 'block' : 'none';
   if (hellUnlocked) renderUpgradeList(HELL_UPGRADES_DEF, 'hell-upgrade-grid');
+  const tundraSec = document.getElementById('tundra-upgrade-section');
+  if (tundraSec) tundraSec.style.display = tundraUnlocked ? 'block' : 'none';
+  if (tundraUnlocked) renderUpgradeList(TUNDRA_UPGRADES_DEF, 'tundra-upgrade-grid');
   renderSkins();
   renderModes();
 }
@@ -2403,7 +2542,7 @@ function resumeGame() {
 function handleMove(clientX) {
   if (state !== 'playing') return;
   const rect = canvas.getBoundingClientRect();
-  cannon.x = Math.max(36, Math.min(W-36, (clientX - rect.left) * (W / rect.width)));
+  cannon.tx = Math.max(36, Math.min(W-36, (clientX - rect.left) * (W / rect.width)));
 }
 
 // Canvas mouse/touch
@@ -2415,13 +2554,13 @@ canvas.addEventListener('touchstart', e => { handleMove(e.touches[0].clientX); e
 window.addEventListener('keydown', e => {
   if (e.code === 'Space') {
     e.preventDefault();
-    if (state === 'start') { hellMode = false; startGame(); return; }
+    if (state === 'start') { hellMode = false; tundraMode = false; startGame(); return; }
     if (state === 'playing') { pauseGame(); return; }
     if (state === 'paused') { resumeGame(); return; }
   }
   if (state === 'playing') {
-    if (e.code === 'ArrowLeft')  cannon.x = Math.max(36, cannon.x - 30);
-    if (e.code === 'ArrowRight') cannon.x = Math.min(W-36, cannon.x + 30);
+    if (e.code === 'ArrowLeft')  cannon.tx = Math.max(36, (cannon.tx ?? cannon.x) - 30);
+    if (e.code === 'ArrowRight') cannon.tx = Math.min(W-36, (cannon.tx ?? cannon.x) + 30);
   }
 });
 
@@ -2446,8 +2585,8 @@ arrowR.addEventListener('mouseup',   ()=>touchArrowEnd('right'));
 const _origUpdate = update;
 function updateWithArrows() {
   if (state === 'playing' && cannon) {
-    if (leftHeld)  cannon.x = Math.max(36, cannon.x - 6);
-    if (rightHeld) cannon.x = Math.min(W-36, cannon.x + 6);
+    if (leftHeld)  cannon.tx = Math.max(36, (cannon.tx ?? cannon.x) - 6);
+    if (rightHeld) cannon.tx = Math.min(W-36, (cannon.tx ?? cannon.x) + 6);
   }
 }
 
@@ -2494,6 +2633,7 @@ document.getElementById('pauseQuitBtn').addEventListener('click', () => {
   document.getElementById('best-start').textContent = highScore;
   updateDailyBtn();
   updateHellBlock();
+  updateTundraBlock();
   env = 'day'; buildDecor();   // le menu revient à l'ambiance jour
 });
 document.getElementById('pauseLbBtn').addEventListener('click', () => {
@@ -2502,7 +2642,7 @@ document.getElementById('pauseLbBtn').addEventListener('click', () => {
 });
 
 // Start buttons
-document.getElementById('startBtn').addEventListener('click', () => { hellMode = false; startGame(); });
+document.getElementById('startBtn').addEventListener('click', () => { hellMode = false; tundraMode = false; startGame(); });
 document.getElementById('replayBtn').addEventListener('click', () => {
   document.getElementById('gameover-screen').classList.add('hidden');
   document.getElementById('hud').classList.remove('hidden');
@@ -2567,7 +2707,7 @@ function updateHellBlock() {
   const el = document.getElementById('hell-block'); if (!el) return;
   if (hellUnlocked) {
     el.innerHTML = `<button class="big-btn hell-btn" id="playHellBtn">🔥 JOUER EN ENFER</button>`;
-    document.getElementById('playHellBtn').addEventListener('click', () => { hellMode = true; startGame(); });
+    document.getElementById('playHellBtn').addEventListener('click', () => { hellMode = true; tundraMode = false; startGame(); });
   } else {
     el.innerHTML = `<button class="sec-btn hell-lock" id="unlockHellBtn">🔒 Mode Enfer — 🪙${HELL_PRICE}</button>`;
     document.getElementById('unlockHellBtn').addEventListener('click', unlockHell);
@@ -2583,6 +2723,28 @@ function unlockHell() {
   updateHellBlock();
 }
 updateHellBlock();
+
+// Mode Tundra (débloqué depuis le menu principal)
+function updateTundraBlock() {
+  const el = document.getElementById('tundra-block'); if (!el) return;
+  if (tundraUnlocked) {
+    el.innerHTML = `<button class="big-btn tundra-btn" id="playTundraBtn">❄️ JOUER EN TUNDRA</button>`;
+    document.getElementById('playTundraBtn').addEventListener('click', () => { tundraMode = true; hellMode = false; startGame(); });
+  } else {
+    el.innerHTML = `<button class="sec-btn tundra-lock" id="unlockTundraBtn">🔒 Mode Tundra — 🪙${TUNDRA_PRICE}</button>`;
+    document.getElementById('unlockTundraBtn').addEventListener('click', unlockTundra);
+  }
+}
+function unlockTundra() {
+  if (tundraUnlocked) return;
+  if (totalCoins < TUNDRA_PRICE) { showNotif(`Il te faut ${TUNDRA_PRICE} 🪙 — continue de jouer !`); return; }
+  totalCoins -= TUNDRA_PRICE; tundraUnlocked = true; saveData();
+  document.getElementById('coin-start').textContent = totalCoins;
+  Sound.resume(); Sound.power();
+  showNotif('❄️ MODE TUNDRA DÉBLOQUÉ !');
+  updateTundraBlock();
+}
+updateTundraBlock();
 
 // Missions
 loadMissions();
