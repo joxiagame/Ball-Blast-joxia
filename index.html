@@ -234,6 +234,7 @@
 
   /* ── SKINS DE CANON ── */
   .shop-subtitle { color:#4ecdc4; font-size:16px; font-weight:800; letter-spacing:1px; margin:22px 0 12px; }
+  .shop-subtitle-hell { color:#ff6a3a; text-shadow:0 0 14px rgba(255,80,20,.5); }
   .skin-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; width:100%; max-width:420px; }
   .skin-card { background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(255,255,255,.035)); border:1px solid rgba(255,255,255,.14); border-radius:16px; padding:12px 8px; text-align:center; transition:border-color .15s; }
   .skin-card.skin-equipped { border-color:#4ade80; box-shadow:0 0 16px rgba(74,222,128,.25); }
@@ -483,6 +484,10 @@
     <h2>🛒 BOUTIQUE</h2>
     <div class="shop-coins">🪙 <span id="shop-coins">0</span> coins</div>
     <div class="upgrade-grid" id="upgrade-grid"></div>
+    <div id="hell-upgrade-section" style="display:none;width:100%;max-width:420px;">
+      <h3 class="shop-subtitle shop-subtitle-hell">🔥 AMÉLIORATIONS ENFER</h3>
+      <div class="upgrade-grid" id="hell-upgrade-grid"></div>
+    </div>
     <h3 class="shop-subtitle">🎨 SKINS DE CANON</h3>
     <div class="skin-grid" id="skin-grid"></div>
     <h3 class="shop-subtitle">🎮 MODES</h3>
@@ -635,7 +640,8 @@ let phaseAnnounce = 0;   // timer d'affichage de l'annonce (frames)
 let phaseAnnounceText = '';
 
 // ── ENTITÉS ──────────────────────────────────
-let cannon, bullets, rocks, particles, floatingTexts, fireballs = [];
+let cannon, bullets, rocks, particles, floatingTexts, fireballs = [], explosions = [];
+let shields = 0, reviveUsed = false;
 let frameCount = 0;
 let lastFireFrame = 0;
 
@@ -692,6 +698,10 @@ function loadData() {
     upgrades   = d.upgrades || { fireRate:1, ballCount:1, ballPower:1, cannonSpeed:1 };
     upgrades.pierce = upgrades.pierce || 0;
     upgrades.drone  = upgrades.drone  || 0;
+    upgrades.hellBurn = upgrades.hellBurn || 0;
+    upgrades.hellExplosion = upgrades.hellExplosion || 0;
+    upgrades.hellShield = upgrades.hellShield || 0;
+    upgrades.hellRevive = upgrades.hellRevive || 0;
     dailyStreak = d.dailyStreak || 0;
     lastClaim   = d.lastClaim || '';
     ownedSkins  = d.ownedSkins || ['default'];
@@ -846,7 +856,7 @@ if (window.ResizeObserver) {
 function initGame() {
   env = hellMode ? 'hell' : 'day';
   score = 0; coins = 0;
-  level = hellMode ? 6 : (frenzyMode ? 4 : 1);
+  level = hellMode ? 8 : (frenzyMode ? 4 : 1);
   levelXp = 0; levelXpMax = (hellMode || frenzyMode) ? 8 : 10;
   coinMul = hellMode ? 3 : (frenzyMode ? 2 : 1);
   frameCount = 0; lastFireFrame = 0;
@@ -868,6 +878,9 @@ function initGame() {
   powerups = [];
   powerupItems = [];
   fireballs = [];
+  explosions = [];
+  shields = upgrades.hellShield || 0;   // boucliers de départ (Bouclier de lave)
+  reviveUsed = false;
   gamePhase = 'normal';
   bossRock = null;
   bossHits = 0;
@@ -1068,6 +1081,16 @@ function hasPowerup(type) {
   return powerups.some(p=>p.type===type && Date.now()<p.endTime);
 }
 
+// Consomme une protection (bouclier de départ, puis power-up bouclier). true si un coup a été encaissé.
+function useShield() {
+  if (shields > 0) { shields--; return true; }
+  if (hasPowerup('shield')) { powerups = powerups.filter(p => p.type !== 'shield'); return true; }
+  return false;
+}
+
+// Protection active (pour l'anneau autour du canon)
+function isProtected() { return shields > 0 || hasPowerup('shield'); }
+
 // ── BALLES ───────────────────────────────────
 function fireBullets() {
   let count = upgrades.ballCount;
@@ -1162,8 +1185,7 @@ function update() {
     // Collision canon → game over (bouclier protège)
     const dx = rock.x - cannon.x, dy = rock.y - (cannon.y + 10);
     if (Math.hypot(dx, dy) < rock.r + 28) {
-      if (hasPowerup('shield')) {
-        powerups = powerups.filter(p=>p.type!=='shield');
+      if (useShield()) {
         // Repousse la pierre pour éviter re-collision immédiate
         rock.vy = -Math.sqrt(H * 0.42);
         rock.vx = (rock.x < W/2 ? -1 : 1) * 5;
@@ -1180,7 +1202,7 @@ function update() {
       if (Math.hypot(rock.x-bul.x, rock.y-bul.y) < rock.r + 5) {
         // Perçage : la balle traverse au lieu d'être consommée
         if (bul.pierce > 0) bul.pierce--; else bullets.splice(bi, 1);
-        const dmg = upgrades.ballPower;
+        const dmg = upgrades.ballPower * (1 + 0.4 * (upgrades.hellBurn || 0));
         rock.hp -= dmg;
         rock.hitFlash = 8;
         score++;
@@ -1199,6 +1221,11 @@ function update() {
           boom(rock.x, rock.y, rock.col, 20);
           Sound.smash(); Sound.coin(); addShake(6);
           rocks.splice(ri, 1);
+
+          // Onde de choc : explosion qui abîme les rochers proches
+          if ((upgrades.hellExplosion || 0) > 0) {
+            explosions.push({ x: rock.x, y: rock.y, dmg: 14 * upgrades.hellExplosion, radius: 55 + 22 * upgrades.hellExplosion });
+          }
 
           // Chance de drop power-up (30%)
           if (Math.random() < 0.30) spawnPowerupItem(rock.x, rock.y);
@@ -1242,6 +1269,24 @@ function update() {
     }
   }
 
+  // ─ Ondes de choc (explosions) : dégâts de zone aux rochers proches ─
+  while (explosions.length) {
+    const ex = explosions.shift();
+    boom(ex.x, ex.y, '#ff8a1e', 16);
+    for (let i = rocks.length - 1; i >= 0; i--) {
+      const rk = rocks[i];
+      if (Math.hypot(rk.x - ex.x, rk.y - ex.y) < ex.radius + rk.r) {
+        rk.hp -= ex.dmg; rk.hitFlash = 6;
+        if (rk.hp <= 0) {
+          const earned = Math.max(1, Math.ceil(rk.maxHp / 9 * coinMul));
+          coins += earned; totalCoins += earned;
+          boom(rk.x, rk.y, rk.col, 14);
+          rocks.splice(i, 1);
+        }
+      }
+    }
+  }
+
   // ─ Particules ─
   for (let i=particles.length-1; i>=0; i--) {
     const p=particles[i];
@@ -1258,16 +1303,17 @@ function update() {
 
   // ─ ENFER : pluie de boules de feu à esquiver (indestructibles) ─
   if (env === 'hell') {
-    const interval = Math.max(38, 95 - level * 3);   // de + en + fréquent
+    const interval = Math.max(24, 78 - level * 3);   // pluie de feu de + en + dense
     if (frameCount % interval === 0) {
-      fireballs.push({ x: 20 + Math.random()*(W-40), y: -20, vy: 5.5 + Math.random()*2.5 + level*0.1, r: 12 + Math.random()*6, t: Math.random()*6 });
+      const n = level >= 14 ? 2 : 1;                 // salves doubles à haut niveau
+      for (let k = 0; k < n; k++)
+        fireballs.push({ x: 20 + Math.random()*(W-40), y: -20, vy: 6.5 + Math.random()*3 + level*0.12, r: 12 + Math.random()*6, t: Math.random()*6 });
     }
     for (let i=fireballs.length-1; i>=0; i--) {
       const f = fireballs[i];
       f.y += f.vy; f.t += 0.3;
       if (Math.hypot(f.x-cannon.x, f.y-(cannon.y-4)) < f.r + 24) {
-        if (hasPowerup('shield')) {
-          powerups = powerups.filter(p=>p.type!=='shield');
+        if (useShield()) {
           showNotif('⭐ Bouclier brisé !');
           boom(cannon.x, cannon.y, '#ff6a00', 20);
           fireballs.splice(i,1);
@@ -1320,8 +1366,7 @@ function update() {
     // Collision canon
     const bdx = bossRock.x - cannon.x, bdy = bossRock.y - (cannon.y + 10);
     if (Math.hypot(bdx, bdy) < bossRock.r + 20) {
-      if (hasPowerup('shield')) {
-        powerups = powerups.filter(p=>p.type!=='shield');
+      if (useShield()) {
         bossRock.vy = -Math.sqrt(H * 0.42);
         bossRock.vx = (bossRock.x < W/2 ? -1 : 1) * 5;
         showNotif('⭐ Bouclier brisé !');
@@ -1707,6 +1752,22 @@ function drawCannon() {
     ctx.fillStyle = sk.hub2;
     ctx.beginPath(); ctx.arc(0, 0, 3.2, 0, Math.PI*2); ctx.fill();
     ctx.restore();
+  }
+
+  // ── Anneau de bouclier (bouclier de départ ou power-up) ──
+  if (isProtected()) {
+    const n = shields + (hasPowerup('shield') ? 1 : 0);
+    const pl = 0.5 + 0.5*Math.sin(frameCount*0.12);
+    ctx.save();
+    ctx.strokeStyle = `rgba(120,220,255,${0.5 + 0.4*pl})`;
+    ctx.lineWidth = 3;
+    ctx.shadowColor = '#7cf'; ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(0, 2, 36, 0, Math.PI*2); ctx.stroke();
+    ctx.restore();
+    if (n > 1) {
+      ctx.fillStyle = '#bff'; ctx.font = '900 12px Nunito, sans-serif';
+      ctx.textAlign = 'center'; ctx.fillText('×' + n, 0, -44);
+    }
   }
 
   ctx.restore();
@@ -2144,6 +2205,18 @@ function loop() {
 
 // ── GAME OVER ─────────────────────────────────
 function triggerGameOver() {
+  // Seconde vie : ressuscite une fois par partie (améliorations Enfer)
+  if ((upgrades.hellRevive || 0) > 0 && !reviveUsed && state === 'playing') {
+    reviveUsed = true;
+    rocks = []; fireballs = []; bossRock = null; gamePhase = 'normal';
+    shields = Math.max(shields, 1);   // court répit protégé
+    spawnRock();
+    boom(cannon.x, cannon.y, '#a349ff', 40);
+    Sound.power(); addShake(18);
+    spawnFloatText(W/2, H/2, '😈 SECONDE VIE !', '#c084ff');
+    phaseAnnounceText = '😈 SECONDE VIE !'; phaseAnnounce = 150;
+    return;
+  }
   state = 'gameover';
   Sound.over(); addShake(16);
   if (score > highScore) highScore = score;
@@ -2169,17 +2242,25 @@ const UPGRADES_DEF = [
   { key:'drone',      icon:'🤖', name:'Drone',     desc:'Tourelle auto',        maxLvl:2, baseCost:400, min:0 },
 ];
 
+// Améliorations "Enfer" (débloquées avec le Mode Enfer, actives dans tous les modes)
+const HELL_UPGRADES_DEF = [
+  { key:'hellBurn',      icon:'🔥', name:'Balles ardentes', desc:'+ dégâts',            maxLvl:5, baseCost:350,  min:0 },
+  { key:'hellExplosion', icon:'🌋', name:'Onde de choc',    desc:'Explosion de zone',   maxLvl:3, baseCost:550,  min:0 },
+  { key:'hellShield',    icon:'🛡️', name:'Bouclier de lave',desc:'Boucliers au départ', maxLvl:2, baseCost:800,  min:0 },
+  { key:'hellRevive',    icon:'😈', name:'Seconde vie',     desc:'Revit 1× / partie',   maxLvl:1, baseCost:1500, min:0 },
+];
+
 function upgradeCost(def) {
   const min = (def.min !== undefined) ? def.min : 1;
   return Math.ceil(def.baseCost * Math.pow(1.55, upgrades[def.key] - min));
 }
 
-function renderShop() {
-  document.getElementById('shop-coins').textContent = totalCoins;
-  const grid = document.getElementById('upgrade-grid');
+function renderUpgradeList(defs, gridId) {
+  const grid = document.getElementById(gridId);
+  if (!grid) return;
   grid.innerHTML = '';
-  UPGRADES_DEF.forEach(def => {
-    const lvl  = upgrades[def.key];
+  defs.forEach(def => {
+    const lvl  = upgrades[def.key] || 0;
     const cost = lvl >= def.maxLvl ? null : upgradeCost(def);
     const pct  = (lvl / def.maxLvl) * 100;
     const card = document.createElement('div');
@@ -2194,7 +2275,7 @@ function renderShop() {
       card.addEventListener('click', () => {
         if (totalCoins >= cost && lvl < def.maxLvl) {
           totalCoins -= cost;
-          upgrades[def.key]++;
+          upgrades[def.key] = (upgrades[def.key] || 0) + 1;
           saveData();
           renderShop();
           showNotif(`${def.name} → Niv.${upgrades[def.key]} 🎉`);
@@ -2205,6 +2286,15 @@ function renderShop() {
     }
     grid.appendChild(card);
   });
+}
+
+function renderShop() {
+  document.getElementById('shop-coins').textContent = totalCoins;
+  renderUpgradeList(UPGRADES_DEF, 'upgrade-grid');
+  // Section Enfer : visible uniquement une fois le Mode Enfer débloqué
+  const hellSec = document.getElementById('hell-upgrade-section');
+  if (hellSec) hellSec.style.display = hellUnlocked ? 'block' : 'none';
+  if (hellUnlocked) renderUpgradeList(HELL_UPGRADES_DEF, 'hell-upgrade-grid');
   renderSkins();
   renderModes();
 }
