@@ -391,6 +391,103 @@
     background:#fff; border-radius:50%; transition:.2s;
   }
   .toggle-sw.on .toggle-knob { left:22px; }
+
+  /* ═══════ REFONTE "SUNNY ARCADE" — chaleureux, ludique, couleurs du logo ═══════ */
+  :root{
+    --cream:#fff6e9; --card:#ffffff; --ink:#4a2e1c; --ink-soft:#9a7355; --line:rgba(74,46,28,.10);
+    --orange2:#f4511e; --red:#e0341f; --gold-text:#b5730a;
+  }
+  ::selection{ background:rgba(244,81,30,.22); }
+
+  /* HUD chaleureux */
+  .hud-box{ background:rgba(255,247,235,.9); border:1px solid rgba(255,255,255,.85); color:var(--ink); text-shadow:none; box-shadow:0 5px 14px rgba(150,80,30,.22); border-radius:16px; }
+  #lvl-bar-bg{ background:rgba(74,46,28,.14); }
+  #lvl-bar{ background:linear-gradient(90deg,#ffb74d,#f4511e); }
+  .hud-icon-btn{ background:rgba(255,247,235,.9); border:1px solid rgba(255,255,255,.85); color:var(--ink); box-shadow:0 5px 14px rgba(150,80,30,.22); }
+  .hud-icon-btn:active{ background:#ffe7cf; }
+  .coin-display-start{ background:rgba(255,247,235,.9); color:var(--gold-text); border:1px solid rgba(255,255,255,.85); text-shadow:none; box-shadow:0 5px 14px rgba(150,80,30,.22); }
+
+  /* Boutons secondaires -> blanc bordé orange */
+  .sec-btn{ color:var(--orange2); background:#fff; border:2px solid rgba(244,81,30,.35); box-shadow:0 4px 0 rgba(244,81,30,.22); backdrop-filter:none; }
+  .sec-btn:hover{ background:#fff2e8; }
+  .sec-btn:active{ box-shadow:0 2px 0 rgba(244,81,30,.22); }
+
+  /* Ecrans modaux -> fond crème chaleureux */
+  #gameover-screen{ background:radial-gradient(120% 95% at 50% 0%, #fff6ea 0%, #ffe6cc 55%, #ffd3a6 100%); backdrop-filter:none; }
+  #shop-screen, #missions-screen, #leaderboard-screen{ background:linear-gradient(180deg,#fff6ea 0%,#ffe9d2 100%); backdrop-filter:none; }
+  #pause-screen{ background:radial-gradient(120% 95% at 50% 0%, rgba(255,246,234,.96), rgba(255,214,166,.96)); backdrop-filter:blur(6px); }
+
+  /* Titres */
+  #gameover-screen h2{ color:var(--red); text-shadow:0 3px 0 #fff, 0 6px 16px rgba(224,52,31,.25); }
+  #gameover-screen .go-score{ color:var(--ink); }
+  #gameover-screen .go-best, .go-coins{ color:var(--gold-text); }
+  #shop-screen h2, #missions-screen h2, #leaderboard-screen h2{ color:var(--red); text-shadow:0 2px 0 #fff; }
+  .shop-coins{ color:var(--gold-text); font-weight:900; }
+  #pause-screen h2{ color:var(--orange2); text-shadow:0 3px 0 #fff; }
+
+  /* Cartes upgrades */
+  .upg-card{ background:var(--card); border:1px solid var(--line); box-shadow:0 5px 14px rgba(150,80,30,.12); }
+  .upg-card:hover{ border-color:rgba(244,81,30,.5); box-shadow:0 10px 22px rgba(244,81,30,.2); }
+  .upg-card .upg-name{ color:var(--ink); }
+  .upg-card .upg-lvl{ color:var(--orange2); }
+  .upg-bar-bg{ background:rgba(74,46,28,.12); }
+  .upg-bar-fill{ background:linear-gradient(90deg,#ffb74d,#f4511e); }
+
+  /* Sous-titres de sections */
+  .shop-subtitle{ color:var(--orange2); text-shadow:none; }
+  .shop-subtitle-hell{ color:#e0341f; text-shadow:none; }
+  .shop-subtitle-tundra{ color:#1f8fd0; text-shadow:none; }
+
+  /* Skins */
+  .skin-card{ background:var(--card); border:1px solid var(--line); box-shadow:0 4px 12px rgba(150,80,30,.12); }
+  .skin-card.skin-equipped{ border-color:var(--orange2); box-shadow:0 0 0 2px rgba(244,81,30,.25); }
+  .skin-name{ color:var(--ink); }
+  .skin-state{ color:#2e9e4f; }
+
+  /* Modes */
+  .mode-card{ background:#fff; border:1px solid rgba(244,81,30,.3); box-shadow:0 4px 12px rgba(150,80,30,.12); }
+  .mode-card.mode-owned{ border-color:rgba(46,158,79,.5); }
+  .mode-name{ color:var(--ink); }
+  .mode-desc{ color:var(--ink-soft); }
+
+  /* Missions */
+  .ms-row{ background:var(--card); border:1px solid var(--line); box-shadow:0 4px 12px rgba(150,80,30,.1); }
+  .ms-label{ color:var(--ink); }
+  .ms-bar-bg{ background:rgba(74,46,28,.12); }
+  .ms-bar{ background:linear-gradient(90deg,#ffb74d,#f4511e); }
+  .ms-prog{ color:var(--ink-soft); }
+  .ms-reward{ color:var(--gold-text); }
+  .ms-claimed{ color:#2e9e4f; }
+
+  /* Classement */
+  .lb-row{ background:#fff; border:1px solid var(--line); color:var(--ink); box-shadow:0 4px 12px rgba(150,80,30,.1); }
+  .lb-row.lb-me{ border-color:var(--orange2); background:#fff3e8; }
+  .lb-rank{ color:var(--orange2); }
+  .lb-name{ color:var(--ink); }
+  .lb-score{ color:var(--gold-text); }
+  .lb-loading{ color:var(--ink-soft); }
+
+  /* Toggle */
+  .toggle-row{ color:var(--ink); text-shadow:0 1px 2px rgba(255,255,255,.4); }
+  .toggle-sw{ background:rgba(74,46,28,.2); border-color:rgba(74,46,28,.25); }
+  .toggle-sw.on{ background:var(--orange2); border-color:var(--orange2); }
+
+  /* Notif */
+  .notif{ background:#fff; color:var(--ink); box-shadow:0 8px 24px rgba(150,80,30,.28); }
+
+  /* Bouton retour hub -> chaleureux */
+  #back-btn{ background:rgba(255,247,235,.92); border:1px solid rgba(244,81,30,.35); color:var(--ink); box-shadow:0 4px 14px rgba(150,80,30,.22); }
+  #back-btn:hover{ box-shadow:0 6px 18px rgba(244,81,30,.35); }
+  #back-btn .player-tag{ background:rgba(244,81,30,.12); border:1px solid rgba(244,81,30,.3); color:var(--orange2); }
+
+  /* Flèches tactiles */
+  .arrow-btn{ background:rgba(255,247,235,.8); border:3px solid rgba(244,81,30,.35); color:var(--orange2); }
+  .arrow-btn:active{ background:#ffe7cf; }
+
+  /* Barres de défilement chaleureuses */
+  #shop-screen::-webkit-scrollbar, #missions-screen::-webkit-scrollbar, #leaderboard-screen::-webkit-scrollbar{ width:10px; }
+  #shop-screen::-webkit-scrollbar-thumb, #missions-screen::-webkit-scrollbar-thumb, #leaderboard-screen::-webkit-scrollbar-thumb{ background:rgba(244,81,30,.4); border-radius:8px; }
+  #shop-screen::-webkit-scrollbar-track, #missions-screen::-webkit-scrollbar-track, #leaderboard-screen::-webkit-scrollbar-track{ background:transparent; }
 </style>
 </head>
 <body>
@@ -432,7 +529,7 @@
   <!-- PAUSE SCREEN -->
   <div id="pause-screen" class="hidden">
     <h2>⏸ PAUSE</h2>
-    <div style="color:#aaa;font-size:15px;">Espace pour reprendre</div>
+    <div style="color:#9a7355;font-size:15px;font-weight:700;">Espace pour reprendre</div>
     <div class="pause-btn-row">
       <button class="big-btn" id="resumeBtn">▶ Reprendre</button>
       <button class="sec-btn" id="pauseShopBtn">🛒 Boutique</button>
@@ -508,7 +605,7 @@
   <div id="leaderboard-screen" class="screen hidden">
     <button class="close-btn" id="closeLb">✕</button>
     <h2>🏆 CLASSEMENT</h2>
-    <div style="color:#888;font-size:13px;margin-bottom:4px;">Ball Blast — Top 10</div>
+    <div style="color:#9a7355;font-size:13px;font-weight:700;margin-bottom:4px;">Ball Blast — Top 10</div>
     <div id="leaderboard"><div class="lb-loading">Chargement…</div></div>
     <button class="big-btn" style="margin-top:20px;" id="closeLb2">Fermer</button>
   </div>
@@ -517,7 +614,7 @@
   <div id="missions-screen" class="screen hidden">
     <button class="close-btn" id="closeMissions">✕</button>
     <h2>🎯 MISSIONS DU JOUR</h2>
-    <div style="color:#9aa;font-size:13px;margin-bottom:16px;">Nouvelles missions chaque jour</div>
+    <div style="color:#9a7355;font-size:13px;font-weight:700;margin-bottom:16px;">Nouvelles missions chaque jour</div>
     <div id="mission-list"></div>
     <button class="big-btn" style="margin-top:24px;" id="closeMissions2">Fermer</button>
   </div>
