@@ -942,12 +942,12 @@ function triggerBossPhase() {
 // Titan : gros rocher qui se scinde en morceaux plus petits quand il éclate
 function spawnSplitterRock(rad, splits, x, y, vx) {
   const nv = 7 + Math.floor(Math.random() * 4);
-  const baseHp = Math.ceil((14 + level * 5) * (1 + bossCount * 0.25) * (splits + 1));
+  const baseHp = Math.ceil(dpsFactor() * (5 + Math.random() * 3) * levelRamp() * (splits + 1) * (1 + bossCount * 0.2));
   rocks.push({
     x: (x !== undefined ? x : rad + Math.random()*(W-rad*2)),
     y: (y !== undefined ? y : -rad - 30),
     r: rad, verts: buildVerts(rad, nv), cracks: buildCracks(rad),
-    hp: baseHp, maxHp: baseHp,
+    hp: baseHp, maxHp: baseHp, reward: Math.round(rockReward() * 1.2),
     vx: (vx !== undefined ? vx : (Math.random()-0.5)*3), vy: 1.5,
     col: '#a349ff', dark: '#5a1a8a',
     angle: 0, av: (Math.random()-0.5)*0.03, hitFlash: 0, scaleShake: 1,
@@ -958,12 +958,12 @@ function spawnSplitterRock(rad, splits, x, y, vx) {
 // Rocher coriace de l'essaim (menaçant, beaucoup de PV)
 function spawnBossSwarmRock() {
   const size = 46 + Math.random() * 40, r = size / 2;
-  const baseHp = Math.ceil((28 + level * 9) * (1 + bossCount * 0.3));
+  const baseHp = Math.ceil(dpsFactor() * (10 + Math.random() * 6) * levelRamp() * (1 + bossCount * 0.25));
   const nv = 7 + Math.floor(Math.random() * 4);
   rocks.push({
     x: r + Math.random() * (W - r*2), y: -r - Math.random()*220,
     r, verts: buildVerts(r, nv), cracks: buildCracks(r),
-    hp: baseHp, maxHp: baseHp,
+    hp: baseHp, maxHp: baseHp, reward: Math.round(rockReward() * 1.5),
     vx: (Math.random()-0.5) * 4, vy: 1.5,
     col: '#ff2e4d', dark: '#8b0000',
     angle: 0, av: (Math.random()-0.5)*0.03, hitFlash: 0, scaleShake: 1
@@ -1047,12 +1047,26 @@ const ICE_COLORS = [
   ['#a9e4ff','#357aa0'], ['#7fd0f5','#245f85'], ['#d6f4ff','#5a9ec4']
 ];
 
+// Estimation de la puissance offensive du joueur (les rochers s'y adaptent -> pas de trivialisation)
+function dpsFactor() {
+  const dmg   = upgrades.ballPower * (1 + 0.4 * (upgrades.hellBurn || 0));
+  const rate  = 1 + (upgrades.fireRate - 1) * 0.12;
+  const count = upgrades.ballCount + (upgrades.ballCount - 1) * 0.15 * (upgrades.pierce || 0) + (upgrades.drone || 0) * 0.5;
+  return Math.max(1, dmg * rate * count);
+}
+// Rampe de difficulté par niveau (linéaire + accélération quadratique -> parties bornées)
+function levelRamp() { return 1 + (level - 1) * 0.16 + level * level * 0.004; }
+// Récompense en coins liée au NIVEAU (la difficulté), pas aux PV -> farmer les niveaux faciles ne paie pas
+function rockReward() { return Math.max(1, Math.round(2 + level * 1.3)); }
+
 function spawnRock(initial=false) {
   const special = env === 'hell' || env === 'tundra';
   const spd = Math.min(special ? 3.4 : 2.6, (special ? 1.35 : 1) + (level - 1) * (special ? 0.06 : 0.05));
   const size  = 40 + Math.random() * 50;
   const r     = size / 2;
-  const baseHp = Math.ceil((level * 8 + Math.random() * level * 6) * Math.max(1, level * 0.3));
+  // PV = puissance du joueur × rampe de niveau (le jeu reste au niveau du joueur)
+  const baseHp = Math.ceil(dpsFactor() * (4 + Math.random() * 3) * levelRamp());
+  const reward = rockReward();
   const palette = env === 'hell' ? LAVA_COLORS : (env === 'tundra' ? ICE_COLORS : ROCK_COLORS);
   const [col, dark] = palette[Math.floor(Math.random() * palette.length)];
   const nv = 7 + Math.floor(Math.random() * 4);
@@ -1062,7 +1076,7 @@ function spawnRock(initial=false) {
     x: r + Math.random() * (W - r*2),
     y: initial ? -r - Math.random()*150 : -r - 20,
     r, verts: buildVerts(r, nv), cracks: buildCracks(r),
-    hp: baseHp, maxHp: baseHp,
+    hp: baseHp, maxHp: baseHp, reward,
     vx: (Math.random()-0.5) * vxRange,
     vy: initial ? 1.5 : 2,
     col, dark,
@@ -1242,7 +1256,7 @@ function update() {
         if (rock.hp <= 0) {
           combo++; comboTimer = 100;
           comboMult = Math.min(4, 1 + Math.floor((combo - 1) / 3) * 0.5);
-          const earned = Math.max(1, Math.ceil(rock.maxHp / 7 * comboMult * coinMul));
+          const earned = Math.max(1, Math.round((rock.reward || 1) * comboMult * coinMul));
           coins += earned; totalCoins += earned;
           missionProgress('destroy', 1);
           missionProgress('combo', combo);
@@ -1314,7 +1328,7 @@ function update() {
       if (Math.hypot(rk.x - ex.x, rk.y - ex.y) < ex.radius + rk.r) {
         rk.hp -= ex.dmg; rk.hitFlash = 6;
         if (rk.hp <= 0) {
-          const earned = Math.max(1, Math.ceil(rk.maxHp / 9 * coinMul));
+          const earned = Math.max(1, Math.round((rk.reward || 1) * 0.6 * coinMul));
           coins += earned; totalCoins += earned;
           boom(rk.x, rk.y, rk.col, 14);
           rocks.splice(i, 1);
